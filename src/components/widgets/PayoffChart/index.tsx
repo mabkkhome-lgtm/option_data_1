@@ -259,7 +259,8 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             series,
         };
 
-        chart.setOption(option, true);
+        // Use notMerge: false to PRESERVE dataZoom state during updates!
+        chart.setOption(option, { notMerge: false, lazyUpdate: true });
 
         // Handle resize with error protection
         let resizeObserver: ResizeObserver | null = null;
