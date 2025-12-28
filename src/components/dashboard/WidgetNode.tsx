@@ -107,26 +107,11 @@ export const WidgetNode = memo(function WidgetNode({ data, id }: NodeProps) {
     const hasOutput = widgetWithOutputSocket.includes(widgetData.type);
     const hasInput = widgetWithInputSocket.includes(widgetData.type);
 
-    // Ref for the widget container to capture wheel events
+    // Ref for the widget container
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Native wheel event listener to stop propagation before React Flow captures it
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            // Stop the event from reaching React Flow's zoom handler
-            e.stopPropagation();
-        };
-
-        // Use capture phase to intercept before React Flow
-        container.addEventListener('wheel', handleWheel, { passive: true });
-
-        return () => {
-            container.removeEventListener('wheel', handleWheel);
-        };
-    }, []);
+    // Note: We no longer block wheel events here - let charts handle their own zoom
+    // React Flow canvas zoom is controlled separately via the Canvas component
 
     // Handle resize
     const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -260,13 +245,14 @@ export const WidgetNode = memo(function WidgetNode({ data, id }: NodeProps) {
                 />
             )}
 
-            {/* RESIZE HANDLE - Bottom Right Corner */}
+            {/* RESIZE HANDLE - Bottom Right Corner - Made bigger and more visible */}
             <div
-                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-50 group"
+                className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-50 group
+                           hover:bg-accent-primary/20 rounded-tl-lg transition-colors"
                 onMouseDown={handleResizeStart}
             >
                 <svg
-                    className="w-3 h-3 absolute bottom-0.5 right-0.5 text-foreground-muted/30 group-hover:text-accent-primary transition-colors"
+                    className="w-4 h-4 absolute bottom-1 right-1 text-gray-500/50 group-hover:text-cyan-400 transition-colors"
                     viewBox="0 0 10 10"
                     fill="currentColor"
                 >
@@ -274,6 +260,47 @@ export const WidgetNode = memo(function WidgetNode({ data, id }: NodeProps) {
                     <path d="M9 4v5H4" fill="none" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
             </div>
+
+            {/* Additional resize handles on edges for easier resizing */}
+            {/* Right edge */}
+            <div
+                className="absolute top-0 right-0 w-2 h-full cursor-ew-resize z-40 hover:bg-cyan-400/20"
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const startX = e.clientX;
+                    const startWidth = width;
+                    const handleMove = (moveE: MouseEvent) => {
+                        setWidth(Math.max(defaultSize.minWidth, startWidth + (moveE.clientX - startX)));
+                    };
+                    const handleUp = () => {
+                        document.removeEventListener('mousemove', handleMove);
+                        document.removeEventListener('mouseup', handleUp);
+                    };
+                    document.addEventListener('mousemove', handleMove);
+                    document.addEventListener('mouseup', handleUp);
+                }}
+            />
+
+            {/* Bottom edge */}
+            <div
+                className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize z-40 hover:bg-cyan-400/20"
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const startY = e.clientY;
+                    const startHeight = height;
+                    const handleMove = (moveE: MouseEvent) => {
+                        setHeight(Math.max(defaultSize.minHeight, startHeight + (moveE.clientY - startY)));
+                    };
+                    const handleUp = () => {
+                        document.removeEventListener('mousemove', handleMove);
+                        document.removeEventListener('mouseup', handleUp);
+                    };
+                    document.addEventListener('mousemove', handleMove);
+                    document.addEventListener('mouseup', handleUp);
+                }}
+            />
 
             {/* Size indicator while resizing */}
             {isResizing && (
