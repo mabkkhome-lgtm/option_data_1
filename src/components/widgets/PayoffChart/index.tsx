@@ -193,9 +193,9 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     const maxY = Math.max(...allPayoffs) * 1.1;
 
     return (
-        <div className="h-full flex flex-col bg-gradient-to-b from-[#0f0a1a] to-[#1a1025]">
+        <div className="h-full flex flex-col bg-transparent">
             {/* Header with live price and P&L */}
-            <div className="px-3 py-2 border-b border-purple-500/20 flex items-center gap-3">
+            <div className="px-3 py-2 border-b border-[rgba(48,54,61,0.5)] flex items-center gap-3 bg-[rgba(255,255,255,0.02)]">
                 {/* Live Price */}
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
                     <Zap size={12} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
@@ -293,33 +293,48 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                     ]}
                     layout={{
                         autosize: true,
-                        margin: { l: 55, r: 20, t: 5, b: 35 },
+                        margin: { l: 60, r: 20, t: 10, b: 40 },
                         paper_bgcolor: 'transparent',
                         plot_bgcolor: 'transparent',
-                        font: { color: '#9ca3af', size: 9 },
-                        dragmode: 'zoom',
+                        font: { color: '#7d8590', size: 10, family: 'system-ui' },
+                        dragmode: 'pan',
                         xaxis: {
-                            gridcolor: 'rgba(75, 85, 99, 0.2)',
+                            gridcolor: 'rgba(48, 54, 61, 0.4)',
+                            gridwidth: 1,
                             tickformat: '$,.0f',
-                            tickfont: { size: 9 },
+                            tickfont: { size: 10, color: '#7d8590' },
+                            showspikes: true,
+                            spikecolor: '#58a6ff',
+                            spikethickness: 1,
+                            spikedash: 'dot',
+                            spikemode: 'across',
                         },
                         yaxis: {
-                            title: { text: 'P&L ($)', font: { size: 9 } },
-                            gridcolor: 'rgba(75, 85, 99, 0.2)',
-                            zerolinecolor: '#6b7280',
-                            tickfont: { size: 9 },
+                            title: { text: 'P&L ($)', font: { size: 10, color: '#7d8590' } },
+                            gridcolor: 'rgba(48, 54, 61, 0.4)',
+                            gridwidth: 1,
+                            zerolinecolor: '#58a6ff',
+                            zerolinewidth: 1,
+                            tickfont: { size: 10, color: '#7d8590' },
                             tickformat: '$,.0f',
+                            showspikes: true,
+                            spikecolor: '#58a6ff',
+                            spikethickness: 1,
+                            spikedash: 'dot',
                         },
                         showlegend: false,
                         hovermode: 'x unified',
                         hoverlabel: {
-                            bgcolor: '#1f2937',
-                            bordercolor: '#4b5563',
-                            font: { color: '#f9fafb', size: 11 },
+                            bgcolor: 'rgba(13, 17, 23, 0.95)',
+                            bordercolor: 'rgba(88, 166, 255, 0.3)',
+                            font: { color: '#e6edf3', size: 12, family: 'system-ui' },
                         },
+                        transition: { duration: 300, easing: 'cubic-in-out' },
                     }}
                     config={{
-                        displayModeBar: false,
+                        displayModeBar: true,
+                        displaylogo: false,
+                        modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
                         responsive: true,
                         scrollZoom: true,
                     }}
@@ -328,7 +343,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             </div>
 
             {/* Footer - Per-source P&L */}
-            <div className="px-3 py-2 border-t border-purple-500/20 bg-black/20">
+            <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center gap-4 text-xs">
                     {chartData.map(data => {
                         const pnl = data.pnlAtSpot;

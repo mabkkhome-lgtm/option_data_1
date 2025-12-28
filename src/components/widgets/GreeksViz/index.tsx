@@ -191,9 +191,9 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     const priceRange = perSourceData[0]?.prices || [80000, 110000];
 
     return (
-        <div className="h-full flex flex-col bg-gradient-to-b from-[#0f0a1a] to-[#1a1025]">
+        <div className="h-full flex flex-col bg-transparent">
             {/* Header with live price */}
-            <div className="px-3 py-2 border-b border-purple-500/20 flex items-center gap-3">
+            <div className="px-3 py-2 border-b border-[rgba(48,54,61,0.5)] flex items-center gap-3 bg-[rgba(255,255,255,0.02)]">
                 {/* Live Price Ticker */}
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
                     <Zap size={12} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
@@ -210,8 +210,8 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                             key={greek}
                             onClick={() => toggleGreek(greek)}
                             className={`text-[10px] px-2 py-0.5 rounded font-medium transition-all ${visibleGreeks[greek]
-                                    ? 'bg-white/10 text-white'
-                                    : 'text-gray-500 hover:text-gray-300'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-500 hover:text-gray-300'
                                 }`}
                         >
                             {greek.charAt(0).toUpperCase() + greek.slice(1)}
@@ -275,31 +275,47 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                     ]}
                     layout={{
                         autosize: true,
-                        margin: { l: 50, r: 20, t: 5, b: 35 },
+                        margin: { l: 55, r: 20, t: 10, b: 40 },
                         paper_bgcolor: 'transparent',
                         plot_bgcolor: 'transparent',
-                        font: { color: '#9ca3af', size: 9 },
-                        dragmode: 'zoom',
+                        font: { color: '#7d8590', size: 10, family: 'system-ui' },
+                        dragmode: 'pan',
                         xaxis: {
-                            gridcolor: 'rgba(75, 85, 99, 0.2)',
+                            gridcolor: 'rgba(48, 54, 61, 0.4)',
+                            gridwidth: 1,
                             tickformat: '$,.0f',
-                            tickfont: { size: 9 },
+                            tickfont: { size: 10, color: '#7d8590' },
+                            showspikes: true,
+                            spikecolor: '#58a6ff',
+                            spikethickness: 1,
+                            spikedash: 'dot',
+                            spikemode: 'across',
+                            rangeslider: { visible: false },
                         },
                         yaxis: {
-                            gridcolor: 'rgba(75, 85, 99, 0.2)',
-                            zerolinecolor: '#374151',
-                            tickfont: { size: 9 },
+                            gridcolor: 'rgba(48, 54, 61, 0.4)',
+                            gridwidth: 1,
+                            zerolinecolor: '#58a6ff',
+                            zerolinewidth: 1,
+                            tickfont: { size: 10, color: '#7d8590' },
+                            showspikes: true,
+                            spikecolor: '#58a6ff',
+                            spikethickness: 1,
+                            spikedash: 'dot',
                         },
                         showlegend: false,
                         hovermode: 'x unified',
                         hoverlabel: {
-                            bgcolor: '#1f2937',
-                            bordercolor: '#4b5563',
-                            font: { color: '#f9fafb', size: 11 },
+                            bgcolor: 'rgba(13, 17, 23, 0.95)',
+                            bordercolor: 'rgba(88, 166, 255, 0.3)',
+                            font: { color: '#e6edf3', size: 12, family: 'system-ui' },
                         },
+                        transition: { duration: 300, easing: 'cubic-in-out' },
                     }}
                     config={{
-                        displayModeBar: false,
+                        displayModeBar: true,
+                        displaylogo: false,
+                        modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
                         responsive: true,
                         scrollZoom: true,
                     }}
@@ -308,7 +324,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             </div>
 
             {/* Footer - Greeks at current price */}
-            <div className="px-3 py-2 border-t border-purple-500/20 bg-black/20">
+            <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
                 <div className="grid grid-cols-4 gap-2 text-xs">
                     {perSourceData.map(data => (
                         (Object.keys(greekColors) as GreekType[]).map((greek) => (
