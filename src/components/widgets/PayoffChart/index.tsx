@@ -223,13 +223,35 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
             },
             dataZoom: [
-                { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseMove: true },
-                { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: true },
                 {
-                    type: 'slider', xAxisIndex: 0, height: 20, bottom: 5,
-                    borderColor: 'transparent', backgroundColor: 'rgba(48, 54, 61, 0.3)',
-                    fillerColor: 'rgba(88, 166, 255, 0.2)', handleStyle: { color: '#58a6ff' },
+                    type: 'inside',
+                    xAxisIndex: 0,
+                    zoomOnMouseWheel: true,  // Scroll to zoom
+                    moveOnMouseWheel: false, // Don't pan on scroll
+                    moveOnMouseMove: false,  // Don't pan on mouse move
+                    preventDefaultMouseMove: false,
+                },
+                {
+                    type: 'inside',
+                    yAxisIndex: 0,
+                    zoomOnMouseWheel: true,
+                    moveOnMouseWheel: false,
+                    moveOnMouseMove: false,
+                },
+                {
+                    type: 'slider',
+                    xAxisIndex: 0,
+                    height: 25,
+                    bottom: 5,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
+                    fillerColor: 'rgba(88, 166, 255, 0.3)',
+                    handleStyle: { color: '#58a6ff', borderColor: '#58a6ff' },
                     textStyle: { color: '#7d8590' },
+                    dataBackground: {
+                        lineStyle: { color: 'rgba(88, 166, 255, 0.3)' },
+                        areaStyle: { color: 'rgba(88, 166, 255, 0.1)' },
+                    },
                 },
             ],
             series,
