@@ -1,23 +1,20 @@
 'use client';
 
 import { useMemo, useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
-import { TrendingUp, TrendingDown, Zap } from 'lucide-react';
-import { useStrategyStore } from '@/stores';
+import { Zap } from 'lucide-react';
 import { useTradesSelectionStore, TradeSource } from '@/stores/tradesSelection';
 import { useLivePriceStore } from '@/stores/livePrice';
 import { calculateGreeks, generatePriceRange } from '@/lib/options/blackScholes';
-
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+import * as echarts from 'echarts';
 
 /**
- * GreeksViz Widget - Thales-Inspired Design
+ * GreeksViz Widget - ECharts Version
  * 
  * Features:
- * - Live price ticker with connection status
- * - Multiple sources with colored curves
- * - Gradient fills under curves
- * - Compact header controls
+ * - Native mouse wheel zoom (dataZoom)
+ * - Drag to zoom area
+ * - Smooth animations
+ * - Premium dark theme
  */
 
 type GreekType = 'delta' | 'gamma' | 'theta' | 'vega';
@@ -33,7 +30,17 @@ interface SourceGreeksData {
     greeksAtSpot: Record<GreekType, number>;
 }
 
+const greekColors: Record<GreekType, string> = {
+    delta: '#22c55e',
+    gamma: '#a855f7',
+    theta: '#ef4444',
+    vega: '#fbbf24',
+};
+
 export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
+    const chartRef = useRef<HTMLDivElement>(null);
+    const chartInstance = useRef<echarts.ECharts | null>(null);
+
     // Store connections
     const sourcesMap = useTradesSelectionStore(state => state.sources);
     const connections = useTradesSelectionStore(state => state.connections);
@@ -98,97 +105,205 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
 
         const prices = generatePriceRange(baseUnderlying, 0.25, 60);
         const T = Math.max(0.001, daysToExpiry / 365);
-        const r = 0.05;
 
         return connectedSources.map(source => {
             const greeks: Record<GreekType, number[]> = {
-                delta: [], gamma: [], theta: [], vega: [],
+                delta: [], gamma: [], theta: [], vega: []
+            };
+            const greeksAtSpot: Record<GreekType, number> = {
+                delta: 0, gamma: 0, theta: 0, vega: 0
             };
 
-            for (const spotPrice of prices) {
-                let totals = { delta: 0, gamma: 0, theta: 0, vega: 0 };
+            for (const price of prices) {
+                let deltaSum = 0, gammaSum = 0, thetaSum = 0, vegaSum = 0;
 
                 for (const trade of source.trades) {
+                    const strike = trade.strike || 0;
                     const isCall = trade.type === 'call';
                     const isLong = trade.direction === 'buy';
-                    const multiplier = isLong ? 1 : -1;
-                    const iv = (trade.iv || 50) / 100;
+                    const size = trade.size || 1;
+                    const iv = trade.iv ? trade.iv / 100 : 0.8;
+                    const multiplier = isLong ? size : -size;
 
-                    const g = calculateGreeks(spotPrice, trade.strike, T, r, iv, isCall ? 'call' : 'put');
-
-                    totals.delta += g.delta * multiplier * trade.size;
-                    totals.gamma += g.gamma * multiplier * trade.size;
-                    totals.theta += g.theta * multiplier * trade.size;
-                    totals.vega += g.vega * multiplier * trade.size;
+                    const g = calculateGreeks(price, strike, T, 0.05, iv, isCall ? 'call' : 'put');
+                    deltaSum += g.delta * multiplier;
+                    gammaSum += g.gamma * multiplier;
+                    thetaSum += g.theta * multiplier;
+                    vegaSum += g.vega * multiplier;
                 }
 
-                greeks.delta.push(totals.delta);
-                greeks.gamma.push(totals.gamma);
-                greeks.theta.push(totals.theta);
-                greeks.vega.push(totals.vega);
+                greeks.delta.push(deltaSum);
+                greeks.gamma.push(gammaSum);
+                greeks.theta.push(thetaSum);
+                greeks.vega.push(vegaSum);
             }
 
-            const spotIdx = prices.findIndex(p => p >= baseUnderlying);
-            const greeksAtSpot = {
-                delta: spotIdx >= 0 ? greeks.delta[spotIdx] : 0,
-                gamma: spotIdx >= 0 ? greeks.gamma[spotIdx] : 0,
-                theta: spotIdx >= 0 ? greeks.theta[spotIdx] : 0,
-                vega: spotIdx >= 0 ? greeks.vega[spotIdx] : 0,
-            };
+            // Calculate at spot
+            const spotIdx = Math.floor(prices.length / 2);
+            greeksAtSpot.delta = greeks.delta[spotIdx] || 0;
+            greeksAtSpot.gamma = greeks.gamma[spotIdx] || 0;
+            greeksAtSpot.theta = greeks.theta[spotIdx] || 0;
+            greeksAtSpot.vega = greeks.vega[spotIdx] || 0;
 
             return { source, prices, greeks, greeksAtSpot };
         });
-    }, [connectedSources, daysToExpiry, hasData, livePrice]);
+    }, [connectedSources, livePrice, daysToExpiry, hasData]);
 
     const toggleGreek = (greek: GreekType) => {
         setVisibleGreeks(prev => ({ ...prev, [greek]: !prev[greek] }));
     };
 
-    // Empty state
-    if (!hasData) {
-        return (
-            <div className="h-full flex items-center justify-center text-foreground-muted text-sm">
-                <div className="text-center p-4">
-                    <TrendingUp size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="font-medium">Connect a Market Screener</p>
-                    <p className="text-xs opacity-75 mt-1">
-                        Draw a connection from screener to this widget
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    // Initialize and update ECharts
+    useEffect(() => {
+        if (!chartRef.current) return;
 
-    // Build traces with gradient fills
-    const traces: any[] = [];
-    const greekColors: Record<GreekType, string> = {
-        delta: '#22c55e',
-        gamma: '#8b5cf6',
-        theta: '#ef4444',
-        vega: '#f59e0b',
-    };
+        // Initialize chart
+        if (!chartInstance.current) {
+            chartInstance.current = echarts.init(chartRef.current, 'dark');
+        }
 
-    perSourceData.forEach((data) => {
-        const sourceColor = data.source.color || '#8b5cf6';
+        const chart = chartInstance.current;
+        const priceRange = perSourceData[0]?.prices || [];
 
-        (Object.keys(greekColors) as GreekType[])
-            .filter(greek => visibleGreeks[greek])
-            .forEach((greek) => {
-                // Main line
-                traces.push({
-                    x: data.prices,
-                    y: data.greeks[greek],
-                    type: 'scatter' as const,
-                    mode: 'lines' as const,
-                    name: `${data.source.label} ${greek.charAt(0).toUpperCase() + greek.slice(1)}`,
-                    line: { color: sourceColor, width: 2 },
-                    fill: 'tozeroy',
-                    fillcolor: `${sourceColor}15`,
-                });
+        // Build series data
+        const series: echarts.SeriesOption[] = [];
+
+        perSourceData.forEach(data => {
+            (Object.keys(greekColors) as GreekType[]).forEach(greek => {
+                if (visibleGreeks[greek]) {
+                    series.push({
+                        name: `${data.source.label} ${greek}`,
+                        type: 'line',
+                        data: data.greeks[greek].map((v, i) => [priceRange[i], v]),
+                        smooth: true,
+                        symbol: 'none',
+                        lineStyle: {
+                            color: greekColors[greek],
+                            width: 2,
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: greekColors[greek] + '40' },
+                                { offset: 1, color: greekColors[greek] + '00' },
+                            ]),
+                        },
+                    });
+                }
             });
-    });
+        });
 
-    const priceRange = perSourceData[0]?.prices || [80000, 110000];
+        // Add current price marker
+        if (livePrice && priceRange.length > 0) {
+            series.push({
+                name: 'Current Price',
+                type: 'line',
+                markLine: {
+                    silent: true,
+                    symbol: 'none',
+                    lineStyle: {
+                        color: '#fbbf24',
+                        type: 'dashed',
+                        width: 2,
+                    },
+                    data: [{ xAxis: livePrice }],
+                    label: {
+                        formatter: '${c}',
+                        color: '#fbbf24',
+                    },
+                },
+                data: [],
+            });
+        }
+
+        const option: echarts.EChartsOption = {
+            backgroundColor: 'transparent',
+            animation: true,
+            animationDuration: 300,
+            grid: {
+                left: 60,
+                right: 20,
+                top: 20,
+                bottom: 60,
+            },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                borderColor: 'rgba(88, 166, 255, 0.3)',
+                textStyle: { color: '#e6edf3' },
+                axisPointer: {
+                    type: 'cross',
+                    lineStyle: { color: '#58a6ff', type: 'dashed' },
+                },
+            },
+            xAxis: {
+                type: 'value',
+                name: 'Price',
+                nameLocation: 'center',
+                nameGap: 30,
+                axisLine: { lineStyle: { color: '#484f58' } },
+                axisLabel: {
+                    color: '#7d8590',
+                    formatter: (v: number) => '$' + v.toLocaleString(),
+                },
+                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: { lineStyle: { color: '#484f58' } },
+                axisLabel: { color: '#7d8590' },
+                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+            },
+            // NATIVE ZOOM - Mouse wheel + drag
+            dataZoom: [
+                {
+                    type: 'inside', // Mouse wheel zoom
+                    xAxisIndex: 0,
+                    zoomOnMouseWheel: true,
+                    moveOnMouseMove: true,
+                    moveOnMouseWheel: false,
+                },
+                {
+                    type: 'inside', // Y-axis zoom
+                    yAxisIndex: 0,
+                    zoomOnMouseWheel: true,
+                },
+                {
+                    type: 'slider', // Slider at bottom
+                    xAxisIndex: 0,
+                    height: 20,
+                    bottom: 5,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(48, 54, 61, 0.3)',
+                    fillerColor: 'rgba(88, 166, 255, 0.2)',
+                    handleStyle: { color: '#58a6ff' },
+                    textStyle: { color: '#7d8590' },
+                },
+            ],
+            series,
+        };
+
+        chart.setOption(option, true);
+
+        // Handle resize
+        const handleResize = () => chart.resize();
+        window.addEventListener('resize', handleResize);
+
+        // Also use ResizeObserver for container resize
+        const resizeObserver = new ResizeObserver(() => chart.resize());
+        resizeObserver.observe(chartRef.current);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            resizeObserver.disconnect();
+        };
+    }, [perSourceData, visibleGreeks, livePrice]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            chartInstance.current?.dispose();
+        };
+    }, []);
 
     return (
         <div className="h-full flex flex-col bg-transparent">
@@ -205,7 +320,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
 
                 {/* Greek toggles */}
                 <div className="flex items-center gap-1">
-                    {(Object.keys(greekColors) as GreekType[]).map((greek) => (
+                    {(['delta', 'gamma', 'theta', 'vega'] as GreekType[]).map((greek) => (
                         <button
                             key={greek}
                             onClick={() => toggleGreek(greek)}
@@ -213,6 +328,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                 ? 'bg-white/10 text-white'
                                 : 'text-gray-500 hover:text-gray-300'
                                 }`}
+                            style={visibleGreeks[greek] ? { borderBottom: `2px solid ${greekColors[greek]}` } : {}}
                         >
                             {greek.charAt(0).toUpperCase() + greek.slice(1)}
                         </button>
@@ -226,101 +342,16 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                         type="number"
                         value={daysToExpiry}
                         onChange={(e) => setDaysToExpiry(Math.max(1, Math.min(365, Number(e.target.value))))}
-                        className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-purple-500/30 text-center"
+                        className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-cyan-500/30 text-center"
                         min="1"
                         max="365"
                     />
                 </div>
-
-                {/* Source badges */}
-                {connectedSources.map(source => (
-                    <span
-                        key={source.sourceId}
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                        style={{
-                            backgroundColor: `${source.color}30`,
-                            color: source.color,
-                        }}
-                    >
-                        {source.label}
-                    </span>
-                ))}
             </div>
 
-            {/* Chart */}
+            {/* Chart - ECharts */}
             <div className="flex-1 min-h-0">
-                <Plot
-                    data={[
-                        ...traces,
-                        // Current price marker
-                        {
-                            x: [livePrice, livePrice],
-                            y: [Math.min(...(traces[0]?.y || [0])) * 1.5, Math.max(...(traces[0]?.y || [0])) * 1.5],
-                            type: 'scatter' as const,
-                            mode: 'lines' as const,
-                            name: 'Current',
-                            line: { color: '#fbbf24', width: 2, dash: 'dot' as const },
-                            showlegend: false,
-                        },
-                        // Zero line
-                        {
-                            x: [priceRange[0], priceRange[priceRange.length - 1]],
-                            y: [0, 0],
-                            type: 'scatter' as const,
-                            mode: 'lines' as const,
-                            line: { color: '#374151', width: 1 },
-                            showlegend: false,
-                            hoverinfo: 'skip' as const,
-                        },
-                    ]}
-                    layout={{
-                        autosize: true,
-                        margin: { l: 55, r: 20, t: 10, b: 40 },
-                        paper_bgcolor: 'transparent',
-                        plot_bgcolor: 'transparent',
-                        font: { color: '#7d8590', size: 10, family: 'system-ui' },
-                        dragmode: 'zoom',
-                        xaxis: {
-                            gridcolor: 'rgba(48, 54, 61, 0.4)',
-                            gridwidth: 1,
-                            tickformat: '$,.0f',
-                            tickfont: { size: 10, color: '#7d8590' },
-                            showspikes: true,
-                            spikecolor: '#58a6ff',
-                            spikethickness: 1,
-                            spikedash: 'dot',
-                            spikemode: 'across',
-                            rangeslider: { visible: false },
-                        },
-                        yaxis: {
-                            gridcolor: 'rgba(48, 54, 61, 0.4)',
-                            gridwidth: 1,
-                            zerolinecolor: '#58a6ff',
-                            zerolinewidth: 1,
-                            tickfont: { size: 10, color: '#7d8590' },
-                            showspikes: true,
-                            spikecolor: '#58a6ff',
-                            spikethickness: 1,
-                            spikedash: 'dot',
-                        },
-                        showlegend: false,
-                        hovermode: 'x unified',
-                        hoverlabel: {
-                            bgcolor: 'rgba(13, 17, 23, 0.95)',
-                            bordercolor: 'rgba(88, 166, 255, 0.3)',
-                            font: { color: '#e6edf3', size: 12, family: 'system-ui' },
-                        },
-                        transition: { duration: 300, easing: 'cubic-in-out' },
-                    }}
-                    config={{
-                        displayModeBar: true,
-                        displaylogo: false,
-                        modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
-                        responsive: true,
-                        scrollZoom: true,
-                    }}
-                    style={{ width: '100%', height: '100%' }}
-                />
+                <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
             </div>
 
             {/* Footer - Greeks at current price */}
@@ -333,8 +364,8 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                     key={`${data.source.sourceId}-${greek}`}
                                     className="flex items-center justify-between bg-black/30 rounded px-2 py-1"
                                 >
-                                    <span style={{ color: data.source.color }} className="font-medium">
-                                        {data.source.label} {greek.charAt(0).toUpperCase()}
+                                    <span style={{ color: greekColors[greek] }} className="font-medium">
+                                        {greek.charAt(0).toUpperCase()}
                                     </span>
                                     <span className="font-mono text-white">
                                         {greek === 'gamma' ? data.greeksAtSpot[greek].toFixed(6) :

@@ -1,23 +1,20 @@
 'use client';
 
 import { useMemo, useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
 import { Zap, TrendingUp, TrendingDown } from 'lucide-react';
-import { useStrategyStore } from '@/stores';
 import { useTradesSelectionStore, TradeSource } from '@/stores/tradesSelection';
 import { useLivePriceStore } from '@/stores/livePrice';
 import { calculateOptionPrice, generatePriceRange } from '@/lib/options/blackScholes';
-
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+import * as echarts from 'echarts';
 
 /**
- * PayoffChart Widget - Thales-Inspired Design
+ * PayoffChart Widget - ECharts Version
  * 
  * Features:
- * - Live price with profit/loss indicator
- * - Green/Red gradient fills for profit/loss zones
- * - Multiple sources with colored curves
- * - Breakeven markers
+ * - Native mouse wheel zoom (dataZoom)
+ * - Drag to zoom area
+ * - Profit/Loss coloring
+ * - Premium dark theme
  */
 
 interface PayoffChartProps {
@@ -25,6 +22,9 @@ interface PayoffChartProps {
 }
 
 export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
+    const chartRef = useRef<HTMLDivElement>(null);
+    const chartInstance = useRef<echarts.ECharts | null>(null);
+
     // Store connections
     const sourcesMap = useTradesSelectionStore(state => state.sources);
     const connections = useTradesSelectionStore(state => state.connections);
@@ -98,99 +98,227 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                     const isCall = trade.type === 'call';
                     const isLong = trade.direction === 'buy';
                     const strike = trade.strike;
-                    const size = trade.size;
-                    const iv = (trade.iv || 50) / 100;
-                    const multiplier = isLong ? 1 : -1;
-                    const entryPriceUSD = trade.priceUSD || trade.price * baseUnderlying;
+                    const size = trade.size || 1;
+                    const premium = (trade.price || 0) * (trade.underlying || trade.indexPrice || baseUnderlying);
+                    const iv = trade.iv ? trade.iv / 100 : 0.8;
 
-                    // At expiry: intrinsic value
-                    const intrinsic = isCall
-                        ? Math.max(0, spotPrice - strike)
-                        : Math.max(0, strike - spotPrice);
-                    const expiryValue = intrinsic * size;
-                    expiryPnL += multiplier * expiryValue - (isLong ? entryPriceUSD : -entryPriceUSD);
+                    // P&L at expiry
+                    let intrinsicValue = 0;
+                    if (isCall) {
+                        intrinsicValue = Math.max(0, spotPrice - strike);
+                    } else {
+                        intrinsicValue = Math.max(0, strike - spotPrice);
+                    }
+                    const expiryValue = intrinsicValue * size;
+                    const cost = premium * size;
+                    expiryPnL += isLong ? (expiryValue - cost) : (cost - expiryValue);
 
-                    // Now: option value with time value
-                    const currentValue = calculateOptionPrice(spotPrice, strike, T, r, iv, isCall ? 'call' : 'put') * size;
-                    currentPnL += multiplier * currentValue - (isLong ? entryPriceUSD : -entryPriceUSD);
+                    // Current P&L
+                    const currentPrice = calculateOptionPrice(spotPrice, strike, T, r, iv, isCall ? 'call' : 'put');
+                    const currentValue = currentPrice * size;
+                    currentPnL += isLong ? (currentValue - cost) : (cost - currentValue);
                 }
 
                 expiryPayoffs.push(expiryPnL);
                 currentPayoffs.push(currentPnL);
             }
 
-            // Find P&L at current price
-            const spotIdx = prices.findIndex(p => p >= livePrice);
-            const pnlAtSpot = spotIdx >= 0 ? currentPayoffs[spotIdx] : 0;
+            // Calculate P&L at current spot
+            const spotIdx = prices.findIndex(p => p >= livePrice) || Math.floor(prices.length / 2);
+            const pnlAtSpot = expiryPayoffs[spotIdx] || 0;
 
-            return {
-                source,
-                prices,
-                expiryPayoffs,
-                currentPayoffs,
-                pnlAtSpot,
-            };
+            return { source, prices, expiryPayoffs, currentPayoffs, pnlAtSpot };
         });
 
-        return sourcesData;
-    }, [connectedSources, daysToExpiry, hasData, livePrice]);
+        return { prices, sourcesData };
+    }, [connectedSources, livePrice, daysToExpiry, hasData]);
 
-    // Empty state
-    if (!hasData || !chartData) {
-        return (
-            <div className="h-full flex items-center justify-center text-foreground-muted text-sm">
-                <div className="text-center p-4">
-                    <TrendingUp size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="font-medium">Connect a Market Screener</p>
-                    <p className="text-xs opacity-75 mt-1">
-                        Draw a connection from screener to this widget
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    // Calculate total P&L at current price
-    const totalPnL = chartData.reduce((sum, d) => sum + d.pnlAtSpot, 0);
+    // Total P&L
+    const totalPnL = chartData?.sourcesData.reduce((sum, d) => sum + d.pnlAtSpot, 0) || 0;
     const isProfitable = totalPnL >= 0;
 
-    // Build traces
-    const traces: any[] = [];
+    // Initialize and update ECharts
+    useEffect(() => {
+        if (!chartRef.current) return;
 
-    chartData.forEach((data) => {
-        const sourceColor = data.source.color || '#8b5cf6';
+        // Initialize chart
+        if (!chartInstance.current) {
+            chartInstance.current = echarts.init(chartRef.current, 'dark');
+        }
 
-        // Current P&L curve
-        if (showNow) {
-            traces.push({
-                x: data.prices,
-                y: data.currentPayoffs,
-                type: 'scatter' as const,
-                mode: 'lines' as const,
-                name: `${data.source.label} Now`,
-                line: { color: sourceColor, width: 2 },
-                fill: 'tozeroy',
-                fillcolor: `${sourceColor}20`,
+        const chart = chartInstance.current;
+        const prices = chartData?.prices || [];
+        const series: echarts.SeriesOption[] = [];
+
+        // Add series for each source
+        chartData?.sourcesData.forEach(data => {
+            if (showExpiry) {
+                series.push({
+                    name: `${data.source.label} Expiry`,
+                    type: 'line',
+                    data: data.expiryPayoffs.map((v, i) => [prices[i], v]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: {
+                        color: data.source.color || '#a855f7',
+                        width: 2,
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(34, 197, 94, 0.3)' },
+                            { offset: 0.5, color: 'rgba(0, 0, 0, 0)' },
+                            { offset: 1, color: 'rgba(239, 68, 68, 0.3)' },
+                        ]),
+                    },
+                });
+            }
+
+            if (showNow) {
+                series.push({
+                    name: `${data.source.label} Now`,
+                    type: 'line',
+                    data: data.currentPayoffs.map((v, i) => [prices[i], v]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: {
+                        color: '#22d3ee',
+                        width: 2,
+                        type: 'dashed',
+                    },
+                });
+            }
+        });
+
+        // Add zero line
+        series.push({
+            name: 'Breakeven',
+            type: 'line',
+            markLine: {
+                silent: true,
+                symbol: 'none',
+                lineStyle: { color: '#58a6ff', type: 'solid', width: 1 },
+                data: [{ yAxis: 0 }],
+                label: { show: false },
+            },
+            data: [],
+        });
+
+        // Add current price marker
+        if (livePrice && prices.length > 0) {
+            series.push({
+                name: 'Current Price',
+                type: 'line',
+                markLine: {
+                    silent: true,
+                    symbol: 'none',
+                    lineStyle: { color: '#fbbf24', type: 'dashed', width: 2 },
+                    data: [{ xAxis: livePrice }],
+                    label: { formatter: '${c}', color: '#fbbf24' },
+                },
+                data: [],
             });
         }
 
-        // Expiry P&L curve
-        if (showExpiry) {
-            traces.push({
-                x: data.prices,
-                y: data.expiryPayoffs,
-                type: 'scatter' as const,
-                mode: 'lines' as const,
-                name: `${data.source.label} Expiry`,
-                line: { color: sourceColor, width: 1, dash: 'dot' as const },
-            });
-        }
-    });
+        const option: echarts.EChartsOption = {
+            backgroundColor: 'transparent',
+            animation: true,
+            animationDuration: 300,
+            grid: {
+                left: 65,
+                right: 20,
+                top: 20,
+                bottom: 60,
+            },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                borderColor: 'rgba(88, 166, 255, 0.3)',
+                textStyle: { color: '#e6edf3' },
+                axisPointer: {
+                    type: 'cross',
+                    lineStyle: { color: '#58a6ff', type: 'dashed' },
+                },
+                formatter: (params: any) => {
+                    if (!params.length) return '';
+                    const price = params[0].data[0];
+                    let html = `<div style="font-weight: bold">Price: $${price.toLocaleString()}</div>`;
+                    params.forEach((p: any) => {
+                        if (p.data && p.data[1] !== undefined) {
+                            const pnl = p.data[1];
+                            const color = pnl >= 0 ? '#22c55e' : '#ef4444';
+                            html += `<div><span style="color: ${p.color}">${p.seriesName}:</span> <span style="color: ${color}">$${pnl.toFixed(0)}</span></div>`;
+                        }
+                    });
+                    return html;
+                },
+            },
+            xAxis: {
+                type: 'value',
+                name: 'Underlying Price',
+                nameLocation: 'center',
+                nameGap: 30,
+                axisLine: { lineStyle: { color: '#484f58' } },
+                axisLabel: {
+                    color: '#7d8590',
+                    formatter: (v: number) => '$' + v.toLocaleString(),
+                },
+                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+            },
+            yAxis: {
+                type: 'value',
+                name: 'P&L ($)',
+                axisLine: { lineStyle: { color: '#484f58' } },
+                axisLabel: {
+                    color: '#7d8590',
+                    formatter: (v: number) => '$' + v.toLocaleString(),
+                },
+                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+            },
+            // NATIVE ZOOM - Mouse wheel + drag
+            dataZoom: [
+                {
+                    type: 'inside', // Mouse wheel zoom X
+                    xAxisIndex: 0,
+                    zoomOnMouseWheel: true,
+                    moveOnMouseMove: true,
+                },
+                {
+                    type: 'inside', // Mouse wheel zoom Y
+                    yAxisIndex: 0,
+                    zoomOnMouseWheel: true,
+                },
+                {
+                    type: 'slider', // Slider at bottom
+                    xAxisIndex: 0,
+                    height: 20,
+                    bottom: 5,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(48, 54, 61, 0.3)',
+                    fillerColor: 'rgba(88, 166, 255, 0.2)',
+                    handleStyle: { color: '#58a6ff' },
+                    textStyle: { color: '#7d8590' },
+                },
+            ],
+            series,
+        };
 
-    const priceRange = chartData[0]?.prices || [80000, 110000];
-    const allPayoffs = chartData.flatMap(d => [...d.expiryPayoffs, ...d.currentPayoffs]);
-    const minY = Math.min(...allPayoffs) * 1.1;
-    const maxY = Math.max(...allPayoffs) * 1.1;
+        chart.setOption(option, true);
+
+        // Handle resize
+        const resizeObserver = new ResizeObserver(() => chart.resize());
+        resizeObserver.observe(chartRef.current);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [chartData, showExpiry, showNow, livePrice]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            chartInstance.current?.dispose();
+        };
+    }, []);
 
     return (
         <div className="h-full flex flex-col bg-transparent">
@@ -219,133 +347,45 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                     </span>
                 </div>
 
-                {/* Curve toggles */}
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => setShowNow(!showNow)}
-                        className={`text-[10px] px-2 py-0.5 rounded font-medium ${showNow ? 'bg-white/10 text-white' : 'text-gray-500'
-                            }`}
-                    >
-                        Now
-                    </button>
+                {/* Toggles */}
+                <div className="flex items-center gap-2 ml-auto">
                     <button
                         onClick={() => setShowExpiry(!showExpiry)}
-                        className={`text-[10px] px-2 py-0.5 rounded font-medium ${showExpiry ? 'bg-white/10 text-white' : 'text-gray-500'
-                            }`}
+                        className={`text-[10px] px-2 py-0.5 rounded ${showExpiry ? 'bg-purple-500/30 text-purple-300' : 'text-gray-500'}`}
                     >
                         Expiry
+                    </button>
+                    <button
+                        onClick={() => setShowNow(!showNow)}
+                        className={`text-[10px] px-2 py-0.5 rounded ${showNow ? 'bg-cyan-500/30 text-cyan-300' : 'text-gray-500'}`}
+                    >
+                        Now
                     </button>
                 </div>
 
                 {/* DTE */}
-                <div className="flex items-center gap-1 text-xs ml-auto">
+                <div className="flex items-center gap-1 text-xs">
                     <span className="text-gray-500">DTE</span>
                     <input
                         type="number"
                         value={daysToExpiry}
                         onChange={(e) => setDaysToExpiry(Math.max(1, Math.min(365, Number(e.target.value))))}
-                        className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-purple-500/30 text-center"
+                        className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-cyan-500/30 text-center"
                         min="1"
                         max="365"
                     />
                 </div>
-
-                {/* Source badges */}
-                {connectedSources.map(source => (
-                    <span
-                        key={source.sourceId}
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                        style={{
-                            backgroundColor: `${source.color}30`,
-                            color: source.color,
-                        }}
-                    >
-                        {source.label}
-                    </span>
-                ))}
             </div>
 
-            {/* Chart */}
+            {/* Chart - ECharts */}
             <div className="flex-1 min-h-0">
-                <Plot
-                    data={[
-                        ...traces,
-                        // Current price marker
-                        {
-                            x: [livePrice, livePrice],
-                            y: [minY, maxY],
-                            type: 'scatter' as const,
-                            mode: 'lines' as const,
-                            name: 'Current',
-                            line: { color: '#fbbf24', width: 2, dash: 'dot' as const },
-                            showlegend: false,
-                        },
-                        // Zero line (breakeven)
-                        {
-                            x: [priceRange[0], priceRange[priceRange.length - 1]],
-                            y: [0, 0],
-                            type: 'scatter' as const,
-                            mode: 'lines' as const,
-                            line: { color: '#6b7280', width: 1 },
-                            showlegend: false,
-                            hoverinfo: 'skip' as const,
-                        },
-                    ]}
-                    layout={{
-                        autosize: true,
-                        margin: { l: 60, r: 20, t: 10, b: 40 },
-                        paper_bgcolor: 'transparent',
-                        plot_bgcolor: 'transparent',
-                        font: { color: '#7d8590', size: 10, family: 'system-ui' },
-                        dragmode: 'zoom',
-                        xaxis: {
-                            gridcolor: 'rgba(48, 54, 61, 0.4)',
-                            gridwidth: 1,
-                            tickformat: '$,.0f',
-                            tickfont: { size: 10, color: '#7d8590' },
-                            showspikes: true,
-                            spikecolor: '#58a6ff',
-                            spikethickness: 1,
-                            spikedash: 'dot',
-                            spikemode: 'across',
-                        },
-                        yaxis: {
-                            title: { text: 'P&L ($)', font: { size: 10, color: '#7d8590' } },
-                            gridcolor: 'rgba(48, 54, 61, 0.4)',
-                            gridwidth: 1,
-                            zerolinecolor: '#58a6ff',
-                            zerolinewidth: 1,
-                            tickfont: { size: 10, color: '#7d8590' },
-                            tickformat: '$,.0f',
-                            showspikes: true,
-                            spikecolor: '#58a6ff',
-                            spikethickness: 1,
-                            spikedash: 'dot',
-                        },
-                        showlegend: false,
-                        hovermode: 'x unified',
-                        hoverlabel: {
-                            bgcolor: 'rgba(13, 17, 23, 0.95)',
-                            bordercolor: 'rgba(88, 166, 255, 0.3)',
-                            font: { color: '#e6edf3', size: 12, family: 'system-ui' },
-                        },
-                        transition: { duration: 300, easing: 'cubic-in-out' },
-                    }}
-                    config={{
-                        displayModeBar: true,
-                        displaylogo: false,
-                        modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
-                        responsive: true,
-                        scrollZoom: true,
-                    }}
-                    style={{ width: '100%', height: '100%' }}
-                />
+                <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
             </div>
 
             {/* Footer - Per-source P&L */}
             <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center gap-4 text-xs">
-                    {chartData.map(data => {
+                    {chartData?.sourcesData.map(data => {
                         const pnl = data.pnlAtSpot;
                         const isProfit = pnl >= 0;
                         return (
