@@ -250,16 +250,44 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
 
         chart.setOption(option, true);
 
-        // Handle resize
-        const resizeObserver = new ResizeObserver(() => chart.resize());
-        resizeObserver.observe(chartRef.current);
+        // Handle resize with error protection
+        let resizeObserver: ResizeObserver | null = null;
+        try {
+            resizeObserver = new ResizeObserver(() => {
+                try {
+                    if (chart && !chart.isDisposed()) {
+                        chart.resize();
+                    }
+                } catch (e) {
+                    console.warn('Chart resize error:', e);
+                }
+            });
+            if (chartRef.current) {
+                resizeObserver.observe(chartRef.current);
+            }
+        } catch (e) {
+            console.warn('ResizeObserver error:', e);
+        }
 
-        return () => { resizeObserver.disconnect(); };
+        return () => {
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+        };
     }, [perSourceData, visibleGreeks, livePrice, echarts]);
 
     // Cleanup on unmount
     useEffect(() => {
-        return () => { chartInstance.current?.dispose(); };
+        return () => {
+            try {
+                if (chartInstance.current && !chartInstance.current.isDisposed()) {
+                    chartInstance.current.dispose();
+                }
+            } catch (e) {
+                console.warn('Chart dispose error:', e);
+            }
+            chartInstance.current = null;
+        };
     }, []);
 
     return (
