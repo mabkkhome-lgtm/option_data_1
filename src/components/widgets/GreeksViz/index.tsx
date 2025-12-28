@@ -219,6 +219,8 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 borderColor: 'rgba(88, 166, 255, 0.3)',
                 textStyle: { color: '#e6edf3' },
                 axisPointer: { type: 'cross', lineStyle: { color: '#58a6ff', type: 'dashed' } },
+                // Format tooltip values to 2 decimal places
+                valueFormatter: (value: number) => typeof value === 'number' ? value.toFixed(2) : value,
             },
             xAxis: {
                 type: 'value',
@@ -227,13 +229,13 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 nameGap: 30,
                 axisLine: { lineStyle: { color: '#484f58' } },
                 axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+                splitLine: { show: false },  // NO GRID LINES
             },
             yAxis: {
                 type: 'value',
                 axisLine: { lineStyle: { color: '#484f58' } },
                 axisLabel: { color: '#7d8590' },
-                splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+                splitLine: { show: false },  // NO GRID LINES
             },
             dataZoom: [
                 {
