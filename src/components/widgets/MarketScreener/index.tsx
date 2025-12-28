@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { deribitService } from '@/lib/api/deribit';
 import { useTradesSelectionStore } from '@/stores/tradesSelection';
+import { queryTrades } from '@/lib/supabase/trades';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
     detectStrategies,
     isBlockTrade,
@@ -152,19 +154,67 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             const startTimestamp = startDate.getTime();
             const endTimestamp = endDate.getTime();
 
-            const result = await deribitService.getTradesByCurrency(
-                currency,
-                'option',
-                500,
-                startTimestamp,
-                endTimestamp
-            );
+            // Try Deribit API first (recent trades)
+            let apiTrades: any[] = [];
+            try {
+                const result = await deribitService.getTradesByCurrency(
+                    currency,
+                    'option',
+                    500,
+                    startTimestamp,
+                    endTimestamp
+                );
+                if (result?.trades) {
+                    apiTrades = result.trades;
+                }
+            } catch (apiErr) {
+                console.warn('[MarketScreener] Deribit API error, trying database:', apiErr);
+            }
+
+            // Also query Supabase for historical data
+            let dbTrades: any[] = [];
+            if (isSupabaseConfigured) {
+                try {
+                    const dbResult = await queryTrades({
+                        currency: currency as 'BTC' | 'ETH',
+                        startDate: startDate,
+                        endDate: endDate,
+                        limit: 1000,
+                    });
+                    dbTrades = dbResult.map(t => ({
+                        trade_id: t.trade_id,
+                        instrument_name: t.instrument_name,
+                        direction: t.direction,
+                        amount: parseFloat(String(t.amount)),
+                        price: parseFloat(String(t.price)),
+                        iv: t.iv ? parseFloat(String(t.iv)) : null,
+                        index_price: t.index_price ? parseFloat(String(t.index_price)) : null,
+                        timestamp: new Date(t.timestamp).getTime(),
+                        block_trade_id: null,
+                    }));
+                } catch (dbErr) {
+                    console.warn('[MarketScreener] Supabase query error:', dbErr);
+                }
+            }
+
+            // Combine and deduplicate by trade_id
+            const allTrades = [...apiTrades, ...dbTrades];
+            const uniqueTradesMap = new Map();
+            allTrades.forEach(t => {
+                if (!uniqueTradesMap.has(t.trade_id)) {
+                    uniqueTradesMap.set(t.trade_id, t);
+                }
+            });
+            const combinedTrades = Array.from(uniqueTradesMap.values());
+
+            console.log(`[MarketScreener] Found ${apiTrades.length} from API, ${dbTrades.length} from DB, ${combinedTrades.length} unique`);
+
 
             const rows: ScreenerRow[] = [];
             const tradesForDetection: TradeForDetection[] = [];
 
-            if (result && result.trades && Array.isArray(result.trades)) {
-                for (const trade of result.trades) {
+            if (combinedTrades.length > 0) {
+                for (const trade of combinedTrades) {
                     const parsed = deribitService.parseInstrumentName(trade.instrument_name);
                     if (!parsed) continue;
 
