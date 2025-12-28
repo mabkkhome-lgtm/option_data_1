@@ -133,7 +133,43 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
 
     useEffect(() => {
         setIsMounted(true);
+
+        // Load saved filters from localStorage
+        try {
+            const saved = localStorage.getItem('market-screener-filters');
+            if (saved) {
+                const filters = JSON.parse(saved);
+                if (filters.currency) setCurrency(filters.currency);
+                if (filters.typeFilter) setTypeFilter(filters.typeFilter);
+                if (filters.sideFilter) setSideFilter(filters.sideFilter);
+                if (typeof filters.minSize === 'number') setMinSize(filters.minSize);
+                if (filters.strategyFilter) setStrategyFilter(filters.strategyFilter);
+                if (filters.sourceLabel) setSourceLabel(filters.sourceLabel);
+            }
+        } catch (e) {
+            console.warn('[MarketScreener] Failed to load saved filters:', e);
+        }
     }, []);
+
+    // Save filters to localStorage when they change
+    useEffect(() => {
+        if (!isMounted) return;
+        try {
+            localStorage.setItem('market-screener-filters', JSON.stringify({
+                currency,
+                typeFilter,
+                sideFilter,
+                minSize,
+                strategyFilter,
+                sourceLabel,
+            }));
+        } catch (e) {
+            console.warn('[MarketScreener] Failed to save filters:', e);
+        }
+    }, [isMounted, currency, typeFilter, sideFilter, minSize, strategyFilter, sourceLabel]);
+
+    // Track if we've set default expiry
+    const [hasSetDefaultExpiry, setHasSetDefaultExpiry] = useState(false);
 
     // Format date for datetime-local input
     const formatDateForInput = (date: Date) => {
@@ -323,6 +359,28 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             .map(e => e[0]);
     }, [trades]);
 
+    // Auto-select tomorrow's expiry as default on first load
+    useEffect(() => {
+        if (hasSetDefaultExpiry || availableExpiries.length === 0) return;
+
+        // Find tomorrow's date range
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        const dayAfterTomorrow = new Date(tomorrow);
+        dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+        // Find the first expiry that's tomorrow or later
+        const tomorrowExpiry = availableExpiries.find(exp => {
+            const expDate = parseExpiryDate(exp);
+            return expDate.getTime() >= tomorrow.getTime();
+        });
+
+        if (tomorrowExpiry) {
+            setExpiryFilter([tomorrowExpiry]);
+            setHasSetDefaultExpiry(true);
+        }
+    }, [availableExpiries, hasSetDefaultExpiry]);
     // Apply filters
     const filteredTrades = useMemo(() => {
         return trades.filter((trade) => {
@@ -441,11 +499,35 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
         a.click();
     };
 
-    // Stats
-    const totalSize = filteredTrades.reduce((sum, t) => sum + t.size, 0);
+    // Stats - Thales-style summary
+    const selectedTrades = filteredTrades.filter(t => selectedIds.has(t.id));
     const selectedCount = selectedIds.size;
     const blockTradeCount = trades.filter(t => t.isBlockTrade).length;
     const strategyCount = detectedStrategies.length;
+
+    // Calculate Thales-style summary stats from selected trades
+    const summaryStats = useMemo(() => {
+        const selected = filteredTrades.filter(t => selectedIds.has(t.id));
+
+        // Count positions by asset (BTC, ETH, etc.)
+        const assetCounts: Record<string, number> = {};
+        selected.forEach(t => {
+            const asset = t.instrumentName.split('-')[0]; // BTC, ETH, SOL
+            assetCounts[asset] = (assetCounts[asset] || 0) + 1;
+        });
+
+        // Total size (contracts)
+        const totalSize = selected.reduce((sum, t) => sum + t.size, 0);
+
+        // Total entry value (premium × size in USD)
+        const totalEntryValue = selected.reduce((sum, t) => sum + (t.priceUSD * t.size), 0);
+
+        // Separate longs (buys) and shorts (sells)
+        const longSize = selected.filter(t => t.direction === 'buy').reduce((sum, t) => sum + t.size, 0);
+        const shortSize = selected.filter(t => t.direction === 'sell').reduce((sum, t) => sum + t.size, 0);
+
+        return { assetCounts, totalSize, totalEntryValue, longSize, shortSize };
+    }, [filteredTrades, selectedIds]);
 
     const formatDate = (date: Date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
     const formatTime = (date: Date) => date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -529,18 +611,43 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
 
                 <div className="flex-1" />
 
-                {/* Stats */}
+                {/* Thales-style Summary Stats */}
                 <div className="flex gap-3 text-xs">
-                    <div className="text-center" title="Selected trades">
-                        <div className="text-foreground-muted text-[10px]">Selected</div>
-                        <div className="font-mono font-bold text-accent-primary">{selectedCount}</div>
+                    {/* Position counts by asset */}
+                    {Object.entries(summaryStats.assetCounts).map(([asset, count]) => (
+                        <div key={asset} className="text-center" title={`${asset} positions`}>
+                            <div className="text-foreground-muted text-[10px]">{asset}</div>
+                            <div className="font-mono font-bold text-cyan-400">{count}</div>
+                        </div>
+                    ))}
+
+                    {/* Total Size */}
+                    <div className="text-center" title="Total contract size">
+                        <div className="text-foreground-muted text-[10px]">Size</div>
+                        <div className="font-mono font-bold text-accent-primary">{summaryStats.totalSize.toFixed(1)}</div>
                     </div>
+
+                    {/* Entry Value */}
+                    <div className="text-center" title="Total entry value (premium × size)">
+                        <div className="text-foreground-muted text-[10px]">Entry</div>
+                        <div className="font-mono font-bold text-green-400">
+                            {summaryStats.totalEntryValue >= 1000
+                                ? `$${(summaryStats.totalEntryValue / 1000).toFixed(1)}K`
+                                : `$${summaryStats.totalEntryValue.toFixed(0)}`}
+                        </div>
+                    </div>
+
+                    <div className="w-px h-6 bg-border-color" />
+
+                    {/* Strategies */}
                     <div className="text-center" title="Detected strategies">
                         <div className="text-foreground-muted text-[10px] flex items-center gap-0.5">
                             <Target size={10} /> Strats
                         </div>
                         <div className="font-mono font-bold text-purple-400">{strategyCount}</div>
                     </div>
+
+                    {/* Blocks */}
                     <div className="text-center" title="Block trades (≥10)">
                         <div className="text-foreground-muted text-[10px] flex items-center gap-0.5">
                             <Zap size={10} /> Blocks
@@ -826,7 +933,7 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             <div className="flex items-center justify-between px-2 py-1 border-t border-border-color text-[10px] text-foreground-muted bg-background-secondary/30">
                 <span>{formatDate(startDate)} {formatTime(startDate)}</span>
                 <div className="flex items-center gap-2">
-                    <span className="font-mono">Total Size: {totalSize.toFixed(1)} BTC</span>
+                    <span className="font-mono">Total Size: {summaryStats.totalSize.toFixed(1)} {currency}</span>
                     <span>|</span>
                     <span>Deribit Options</span>
                 </div>
