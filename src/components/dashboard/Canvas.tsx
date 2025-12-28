@@ -181,6 +181,9 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
                 snapGrid={[20, 20]}
                 minZoom={0.1}
                 maxZoom={2}
+                zoomOnScroll={false}
+                zoomActivationKeyCode="Control"
+                panOnScroll={true}
                 defaultEdgeOptions={defaultEdgeOptions}
                 connectionLineType={ConnectionLineType.SmoothStep}
                 connectionLineStyle={connectionLineStyle}
