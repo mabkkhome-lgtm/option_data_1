@@ -226,17 +226,19 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 {
                     type: 'inside',
                     xAxisIndex: 0,
-                    zoomOnMouseWheel: true,  // Scroll to zoom
-                    moveOnMouseWheel: false, // Don't pan on scroll
-                    moveOnMouseMove: false,  // Don't pan on mouse move
-                    preventDefaultMouseMove: false,
+                    zoomOnMouseWheel: true,   // Scroll to zoom
+                    moveOnMouseWheel: false,  // Don't pan on scroll
+                    moveOnMouseMove: true,    // DRAG TO PAN - enabled!
+                    preventDefaultMouseMove: true,
+                    filterMode: 'none',       // Don't filter data on zoom
                 },
                 {
                     type: 'inside',
                     yAxisIndex: 0,
                     zoomOnMouseWheel: true,
                     moveOnMouseWheel: false,
-                    moveOnMouseMove: false,
+                    moveOnMouseMove: true,    // DRAG TO PAN - enabled!
+                    filterMode: 'none',
                 },
                 {
                     type: 'slider',
