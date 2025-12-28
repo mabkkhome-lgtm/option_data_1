@@ -189,6 +189,23 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
         (type: WidgetType, title: string) => {
             if (!contextMenu) return;
 
+            // Widget sizes for NodeResizer
+            const widgetSizes: Record<string, { width: number; height: number }> = {
+                'option-chain': { width: 750, height: 500 },
+                'strategy-builder': { width: 450, height: 400 },
+                'payoff-chart': { width: 550, height: 400 },
+                'greeks-viz': { width: 550, height: 400 },
+                'simulation-control': { width: 350, height: 300 },
+                'option-filter': { width: 400, height: 200 },
+                'black-scholes': { width: 450, height: 500 },
+                'position-simulator': { width: 500, height: 450 },
+                'index-price': { width: 300, height: 180 },
+                'strategy-presets': { width: 350, height: 350 },
+                'market-screener': { width: 800, height: 600 },
+                'heatmap': { width: 600, height: 500 },
+            };
+            const size = widgetSizes[type] || { width: 400, height: 300 };
+
             const widgetConfig: WidgetConfig = {
                 id: crypto.randomUUID(),
                 type,
@@ -200,6 +217,7 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
                 type: 'widget',
                 position: { x: contextMenu.flowX - 150, y: contextMenu.flowY - 100 },
                 data: widgetConfig,
+                style: { width: size.width, height: size.height },
             };
 
             setNodes((nds) => [...nds, newNode]);
