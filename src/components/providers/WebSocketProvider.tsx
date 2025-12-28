@@ -3,12 +3,15 @@
 import { useEffect, useRef } from 'react';
 import { getDeribitWebSocket } from '@/lib/api/deribitWebSocket';
 import { useLivePriceStore } from '@/stores/livePrice';
+import { insertTrade, wsTradeToDbTrade } from '@/lib/supabase/trades';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 
 /**
  * WebSocket Provider
  * 
- * Initializes WebSocket connection and updates stores.
- * Should be placed near the root of the app.
+ * Initializes WebSocket connection and:
+ * - Updates live price stores
+ * - Stores trades to Supabase database
  */
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const initialized = useRef(false);
@@ -34,12 +37,31 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             }
         });
 
+        // Store trades to database
+        ws.onTrade((trade) => {
+            if (isSupabaseConfigured) {
+                const currency = trade.instrumentName.startsWith('BTC') ? 'BTC' : 'ETH';
+                const dbTrade = wsTradeToDbTrade(trade, currency);
+                insertTrade(dbTrade);
+            }
+        });
+
         // Connect and subscribe
         ws.connect()
             .then(async () => {
+                // Subscribe to price feeds
                 await ws.subscribeToPrice('BTC');
                 await ws.subscribeToPrice('ETH');
                 console.log('[WSProvider] Subscribed to price feeds');
+
+                // Subscribe to option trades for database storage
+                if (isSupabaseConfigured) {
+                    await ws.subscribeToTrades('BTC');
+                    await ws.subscribeToTrades('ETH');
+                    console.log('[WSProvider] Subscribed to trade feeds (storing to DB)');
+                } else {
+                    console.log('[WSProvider] Supabase not configured - trades not stored');
+                }
             })
             .catch(console.error);
 
