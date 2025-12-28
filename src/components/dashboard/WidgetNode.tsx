@@ -1,9 +1,11 @@
 'use client';
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState, useEffect } from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { Grip, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Rnd } from 'react-rnd';
+import { Grip, X } from 'lucide-react';
 import type { WidgetConfig } from '@/types';
+import { getWidgetDef } from '@/lib/widgetConfig';
 
 import { OptionChainWidget } from '../widgets/OptionChain';
 import { StrategyBuilderWidget } from '../widgets/StrategyBuilder';
@@ -57,28 +59,6 @@ const WidgetComponent = memo(function WidgetComponent({ type, widgetId }: { type
     }
 });
 
-// Default widget sizes
-const defaultWidgetSizes: Record<string, { width: number; height: number }> = {
-    'option-chain': { width: 750, height: 500 },
-    'strategy-builder': { width: 450, height: 400 },
-    'payoff-chart': { width: 550, height: 400 },
-    'greeks-viz': { width: 550, height: 400 },
-    'simulation-control': { width: 350, height: 300 },
-    'option-filter': { width: 400, height: 200 },
-    'black-scholes': { width: 450, height: 500 },
-    'position-simulator': { width: 500, height: 450 },
-    'index-price': { width: 300, height: 180 },
-    'strategy-presets': { width: 350, height: 350 },
-    'market-screener': { width: 800, height: 600 },
-    'heatmap': { width: 600, height: 500 },
-    'default': { width: 400, height: 300 },
-};
-
-// Widgets that have output sockets (sources of data)
-const widgetWithOutputSocket = ['option-chain', 'option-filter', 'market-screener', 'position-simulator'];
-// Widgets that have input sockets (receive data)
-const widgetWithInputSocket = ['payoff-chart', 'greeks-viz', 'heatmap'];
-
 // Socket styles
 const inputSocketStyle: React.CSSProperties = {
     background: '#22d3ee',
@@ -96,31 +76,35 @@ const outputSocketStyle: React.CSSProperties = {
 
 export const WidgetNode = memo(function WidgetNode({ id, data, selected }: NodeProps) {
     const widgetData = data as WidgetNodeData;
-    const defaultSize = defaultWidgetSizes[widgetData.type] || defaultWidgetSizes.default;
-    const { deleteElements } = useReactFlow();
+    const widgetDef = getWidgetDef(widgetData.type);
+    const { deleteElements, updateNode } = useReactFlow();
 
-    const hasOutput = widgetWithOutputSocket.includes(widgetData.type);
-    const hasInput = widgetWithInputSocket.includes(widgetData.type);
+    const [size, setSize] = useState({
+        width: widgetDef.size.width,
+        height: widgetDef.size.height,
+    });
 
     // Delete this node
-    const handleDelete = useCallback(() => {
+    const handleDelete = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
         deleteElements({ nodes: [{ id }] });
     }, [deleteElements, id]);
+
+    // Stop all events from bubbling to React Flow
+    const stopPropagation = useCallback((e: React.MouseEvent | React.WheelEvent) => {
+        e.stopPropagation();
+    }, []);
 
     return (
         <div
             className={`widget-container ${selected ? 'ring-2 ring-cyan-500' : ''}`}
             style={{
-                width: '100%',
-                height: '100%',
-                minWidth: 250,
-                minHeight: 200,
-                resize: 'both',
-                overflow: 'hidden',
+                width: size.width,
+                height: size.height,
             }}
         >
             {/* Input Socket (Left side) */}
-            {hasInput && (
+            {widgetDef.hasInput && (
                 <Handle
                     type="target"
                     position={Position.Left}
@@ -135,17 +119,17 @@ export const WidgetNode = memo(function WidgetNode({ id, data, selected }: NodeP
                 />
             )}
 
-            {/* Widget Header - This is DRAGGABLE */}
+            {/* Widget Header - DRAGGABLE */}
             <div className="widget-header">
                 <div className="flex items-center gap-2">
                     <Grip size={14} className="text-foreground-muted cursor-grab active:cursor-grabbing" />
                     <span className="widget-title">{widgetData.title}</span>
-                    {hasOutput && (
+                    {widgetDef.hasOutput && (
                         <span className="text-xs px-1.5 py-0.5 bg-accent-primary/20 text-accent-primary rounded">
                             OUT
                         </span>
                     )}
-                    {hasInput && (
+                    {widgetDef.hasInput && (
                         <span className="text-xs px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
                             IN
                         </span>
@@ -162,16 +146,18 @@ export const WidgetNode = memo(function WidgetNode({ id, data, selected }: NodeP
                 </div>
             </div>
 
-            {/* Widget Content - NODRAG to allow chart interaction */}
+            {/* Widget Content - Blocks events from bubbling */}
             <div
-                className="widget-content nodrag nowheel"
+                className="widget-content nodrag"
+                onMouseDown={stopPropagation}
+                onWheel={stopPropagation}
                 style={{ cursor: 'default' }}
             >
                 <WidgetComponent type={widgetData.type} widgetId={id} />
             </div>
 
             {/* Output Socket (Right side) */}
-            {hasOutput && (
+            {widgetDef.hasOutput && (
                 <Handle
                     type="source"
                     position={Position.Right}
@@ -185,6 +171,36 @@ export const WidgetNode = memo(function WidgetNode({ id, data, selected }: NodeP
                     isConnectable={true}
                 />
             )}
+
+            {/* Resize Handle - Bottom Right */}
+            <div
+                className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize nodrag"
+                style={{
+                    background: 'linear-gradient(135deg, transparent 50%, rgba(88,166,255,0.5) 50%)',
+                    borderRadius: '0 0 4px 0',
+                }}
+                onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startWidth = size.width;
+                    const startHeight = size.height;
+
+                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                        const newWidth = Math.max(widgetDef.size.minWidth, startWidth + moveEvent.clientX - startX);
+                        const newHeight = Math.max(widgetDef.size.minHeight, startHeight + moveEvent.clientY - startY);
+                        setSize({ width: newWidth, height: newHeight });
+                    };
+
+                    const handleMouseUp = () => {
+                        document.removeEventListener('mousemove', handleMouseMove);
+                        document.removeEventListener('mouseup', handleMouseUp);
+                    };
+
+                    document.addEventListener('mousemove', handleMouseMove);
+                    document.addEventListener('mouseup', handleMouseUp);
+                }}
+            />
         </div>
     );
 });
