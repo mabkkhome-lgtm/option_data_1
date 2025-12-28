@@ -297,7 +297,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                         paper_bgcolor: 'transparent',
                         plot_bgcolor: 'transparent',
                         font: { color: '#7d8590', size: 10, family: 'system-ui' },
-                        dragmode: 'pan',
+                        dragmode: 'zoom',
                         xaxis: {
                             gridcolor: 'rgba(48, 54, 61, 0.4)',
                             gridwidth: 1,

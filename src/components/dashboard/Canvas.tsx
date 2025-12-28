@@ -57,11 +57,32 @@ const defaultEdgeOptions = {
 interface DashboardCanvasProps {
     onNodeAdd?: (node: Node) => void;
 }
+const STORAGE_KEY = 'option-simulator-layout';
+
+// Load initial state from localStorage
+function loadSavedLayout(): { nodes: Node[]; edges: Edge[]; connections: { source: string; target: string }[] } {
+    if (typeof window === 'undefined') return { nodes: [], edges: [], connections: [] };
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const data = JSON.parse(saved);
+            return {
+                nodes: data.nodes || [],
+                edges: data.edges || [],
+                connections: data.connections || [],
+            };
+        }
+    } catch (e) {
+        console.error('[Canvas] Failed to load saved layout:', e);
+    }
+    return { nodes: [], edges: [], connections: [] };
+}
 
 export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
     const [contextMenu, setContextMenu] = useState<{
         x: number;
         y: number;
@@ -74,6 +95,33 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
 
     // Track active connections for data flow
     const [connections, setConnections] = useState<{ source: string; target: string }[]>([]);
+
+    // Load saved layout on mount
+    useEffect(() => {
+        const saved = loadSavedLayout();
+        if (saved.nodes.length > 0) {
+            setNodes(saved.nodes);
+            setEdges(saved.edges);
+            setConnections(saved.connections);
+            // Re-register connections in store
+            saved.connections.forEach(conn => {
+                addConnection(conn.source, conn.target);
+            });
+        }
+        setIsInitialized(true);
+    }, []);
+
+    // Save layout to localStorage whenever it changes
+    useEffect(() => {
+        if (!isInitialized) return;
+        try {
+            const layout = { nodes, edges, connections };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+        } catch (e) {
+            console.error('[Canvas] Failed to save layout:', e);
+        }
+    }, [nodes, edges, connections, isInitialized]);
+
 
     // Handle edge connections - Thales style with data flow
     const onConnect: OnConnect = useCallback(
