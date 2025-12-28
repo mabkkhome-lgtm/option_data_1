@@ -248,7 +248,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 min-h-0" onWheel={(e) => e.stopPropagation()}>
+            <div className="flex-1 min-h-0">
                 <Plot
                     data={[
                         ...traces,

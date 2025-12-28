@@ -232,7 +232,7 @@ export function HeatmapWidget() {
             {/* Heatmap */}
             <div
                 className="flex-1 min-h-0"
-                onWheel={(e) => e.stopPropagation()}
+                onWheel={undefined}
             >
                 {heatmapData && heatmapData.strikes.length > 0 ? (
                     <Plot
