@@ -198,14 +198,13 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             backgroundColor: 'transparent',
             animation: true,
             animationDuration: 300,
-            grid: { left: 65, right: 20, top: 20, bottom: 60 },
+            grid: { left: 65, right: 35, top: 20, bottom: 60 }, // Extra right space for Y slider
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: 'rgba(13, 17, 23, 0.95)',
                 borderColor: 'rgba(88, 166, 255, 0.3)',
                 textStyle: { color: '#e6edf3' },
-                axisPointer: { type: 'cross', lineStyle: { color: '#58a6ff', type: 'dashed' } },
-                // Format tooltip values to 2 decimal places
+                axisPointer: { type: 'none' }, // NO CROSSHAIR
                 valueFormatter: (value: number) => '$' + value.toFixed(2),
             },
             xAxis: {
@@ -215,47 +214,60 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 nameGap: 30,
                 axisLine: { lineStyle: { color: '#484f58' } },
                 axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { show: false },  // NO GRID LINES
+                splitLine: { show: false },
             },
             yAxis: {
                 type: 'value',
                 name: 'P&L ($)',
                 axisLine: { lineStyle: { color: '#484f58' } },
                 axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { show: false },  // NO GRID LINES
+                splitLine: { show: false },
             },
             dataZoom: [
+                // X-axis inside zoom (scroll/drag)
                 {
                     type: 'inside',
                     xAxisIndex: 0,
-                    zoomOnMouseWheel: true,   // Scroll to zoom
-                    moveOnMouseWheel: false,  // Don't pan on scroll
-                    moveOnMouseMove: true,    // DRAG TO PAN - enabled!
+                    zoomOnMouseWheel: 'shift',  // Shift+scroll for X zoom
+                    moveOnMouseWheel: false,
+                    moveOnMouseMove: true,
                     preventDefaultMouseMove: true,
-                    filterMode: 'none',       // Don't filter data on zoom
+                    filterMode: 'none',
                 },
+                // Y-axis inside zoom (scroll/drag)
                 {
                     type: 'inside',
                     yAxisIndex: 0,
-                    zoomOnMouseWheel: true,
+                    zoomOnMouseWheel: true,     // Normal scroll for Y zoom
                     moveOnMouseWheel: false,
-                    moveOnMouseMove: true,    // DRAG TO PAN - enabled!
+                    moveOnMouseMove: true,
                     filterMode: 'none',
                 },
+                // X-axis slider (bottom)
                 {
                     type: 'slider',
                     xAxisIndex: 0,
-                    height: 25,
+                    height: 20,
                     bottom: 5,
                     borderColor: 'transparent',
                     backgroundColor: 'rgba(48, 54, 61, 0.4)',
                     fillerColor: 'rgba(88, 166, 255, 0.3)',
                     handleStyle: { color: '#58a6ff', borderColor: '#58a6ff' },
-                    textStyle: { color: '#7d8590' },
-                    dataBackground: {
-                        lineStyle: { color: 'rgba(88, 166, 255, 0.3)' },
-                        areaStyle: { color: 'rgba(88, 166, 255, 0.1)' },
-                    },
+                    textStyle: { color: '#7d8590', fontSize: 9 },
+                    showDetail: false,
+                },
+                // Y-axis slider (right side) - for independent Y zoom
+                {
+                    type: 'slider',
+                    yAxisIndex: 0,
+                    width: 20,
+                    right: 5,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
+                    fillerColor: 'rgba(139, 92, 246, 0.3)',
+                    handleStyle: { color: '#8b5cf6', borderColor: '#8b5cf6' },
+                    textStyle: { color: '#7d8590', fontSize: 9 },
+                    showDetail: false,
                 },
             ],
             series,
