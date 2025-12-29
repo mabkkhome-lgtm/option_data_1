@@ -381,7 +381,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 {!echarts ? (
                     <div className="flex items-center justify-center h-full text-gray-500">Loading chart...</div>
                 ) : (
-                    <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
+                    <div ref={chartRef} className="nodrag nowheel" style={{ width: '100%', height: '100%' }} />
                 )}
             </div>
 
