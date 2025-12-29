@@ -353,12 +353,20 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 </div>
             </div>
 
-            {/* Chart */}
+            {/* Chart - with explicit event handling to prevent React Flow interference */}
             <div className="flex-1 min-h-0">
                 {!echarts ? (
                     <div className="flex items-center justify-center h-full text-gray-500">Loading chart...</div>
                 ) : (
-                    <div ref={chartRef} className="nodrag nowheel" style={{ width: '100%', height: '100%' }} />
+                    <div
+                        ref={chartRef}
+                        className="nodrag nowheel nopan"
+                        style={{ width: '100%', height: '100%' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseMove={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    />
                 )}
             </div>
 
