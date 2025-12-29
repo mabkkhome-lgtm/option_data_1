@@ -47,9 +47,11 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     const { btcPrice, isConnected } = useLivePriceStore();
     const livePrice = btcPrice || 95000;
 
-    // Tooltip state
+    // Tooltip and crosshair state
+    const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number; price: number; pnl: number } | null>(null);
     const { showTooltip, hideTooltip, tooltipOpen, tooltipData, tooltipLeft, tooltipTop } = useTooltip<{
         price: number;
+        pnl: number;
         values: { label: string; value: number; color: string }[];
     }>();
 
@@ -190,7 +192,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     // Bisector for tooltip
     const bisectPrice = bisector<{ price: number; pnl: number }, number>(d => d.price).left;
 
-    // Handle tooltip
+    // Handle tooltip and crosshair
     const handleTooltip = useCallback(
         (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
             if (!chartData) return;
@@ -199,8 +201,11 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             if (!point) return;
 
             const x = point.x - margin.left;
+            const y = point.y - margin.top;
             const price = xScale.invert(x);
+            const pnlValue = yScale.invert(y);
 
+            // Get P&L values at this price point
             const values = chartData.sourcesData.flatMap(data => {
                 const result: { label: string; value: number; color: string }[] = [];
 
@@ -227,14 +232,26 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 return result;
             });
 
+            // Get the primary P&L value (from first source's expiry if available)
+            const primaryPnL = values.length > 0 ? values[0].value : pnlValue;
+
+            // Update crosshair position
+            setCrosshairPos({
+                x: Math.max(0, Math.min(innerWidth, x)),
+                y: Math.max(0, Math.min(innerHeight, y)),
+                price,
+                pnl: primaryPnL,
+            });
+
             showTooltip({
-                tooltipData: { price, values },
+                tooltipData: { price, pnl: primaryPnL, values },
                 tooltipLeft: point.x,
                 tooltipTop: point.y,
             });
         },
-        [chartData, showExpiry, showNow, showTooltip, margin.left, bisectPrice]
+        [chartData, showExpiry, showNow, showTooltip, margin.left, margin.top, innerWidth, innerHeight, bisectPrice]
     );
+
 
     if (!hasData) {
         return (
@@ -328,6 +345,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     onMouseLeave={() => {
                                         zoom.dragEnd();
                                         hideTooltip();
+                                        setCrosshairPos(null);
                                     }}
                                     onTouchStart={zoom.dragStart}
                                     onTouchMove={zoom.dragMove}
@@ -493,6 +511,87 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                         >
                                             P&L ($)
                                         </text>
+
+                                        {/* Crosshair - follows mouse cursor */}
+                                        {crosshairPos && tooltipOpen && (
+                                            <g style={{ pointerEvents: 'none' }}>
+                                                {/* Vertical line */}
+                                                <line
+                                                    x1={crosshairPos.x}
+                                                    x2={crosshairPos.x}
+                                                    y1={0}
+                                                    y2={innerHeight}
+                                                    stroke="#58a6ff"
+                                                    strokeWidth={1}
+                                                    strokeDasharray="4,2"
+                                                    opacity={0.8}
+                                                />
+                                                {/* Horizontal line */}
+                                                <line
+                                                    x1={0}
+                                                    x2={innerWidth}
+                                                    y1={crosshairPos.y}
+                                                    y2={crosshairPos.y}
+                                                    stroke="#58a6ff"
+                                                    strokeWidth={1}
+                                                    strokeDasharray="4,2"
+                                                    opacity={0.8}
+                                                />
+                                                {/* Price label at bottom of vertical line */}
+                                                <g transform={`translate(${crosshairPos.x}, ${innerHeight + 5})`}>
+                                                    <rect
+                                                        x={-35}
+                                                        y={0}
+                                                        width={70}
+                                                        height={18}
+                                                        fill="rgba(88, 166, 255, 0.9)"
+                                                        rx={3}
+                                                    />
+                                                    <text
+                                                        x={0}
+                                                        y={13}
+                                                        fill="#fff"
+                                                        fontSize={10}
+                                                        fontWeight="bold"
+                                                        textAnchor="middle"
+                                                        fontFamily="monospace"
+                                                    >
+                                                        ${crosshairPos.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </text>
+                                                </g>
+                                                {/* P&L label at left of horizontal line */}
+                                                <g transform={`translate(-5, ${crosshairPos.y})`}>
+                                                    <rect
+                                                        x={-55}
+                                                        y={-9}
+                                                        width={55}
+                                                        height={18}
+                                                        fill={crosshairPos.pnl >= 0 ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)'}
+                                                        rx={3}
+                                                    />
+                                                    <text
+                                                        x={-27}
+                                                        y={4}
+                                                        fill="#fff"
+                                                        fontSize={10}
+                                                        fontWeight="bold"
+                                                        textAnchor="middle"
+                                                        fontFamily="monospace"
+                                                    >
+                                                        {crosshairPos.pnl >= 0 ? '+' : ''}${crosshairPos.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </text>
+                                                </g>
+                                                {/* Crosshair circle at intersection */}
+                                                <circle
+                                                    cx={crosshairPos.x}
+                                                    cy={crosshairPos.y}
+                                                    r={4}
+                                                    fill="#58a6ff"
+                                                    stroke="#fff"
+                                                    strokeWidth={1.5}
+                                                />
+                                            </g>
+                                        )}
                                     </Group>
 
                                     {/* Zoom controls */}
