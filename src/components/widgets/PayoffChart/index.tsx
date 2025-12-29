@@ -1,23 +1,42 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
-import { Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { Zap, TrendingUp, TrendingDown, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTradesSelectionStore, TradeSource } from '@/stores/tradesSelection';
 import { useLivePriceStore } from '@/stores/livePrice';
 import { calculateOptionPrice, generatePriceRange } from '@/lib/options/blackScholes';
 
-/**
- * PayoffChart Widget - ECharts Version (SSR-Safe)
- */
+// Visx imports for smooth SVG charting (like Thales)
+import { scaleLinear } from '@visx/scale';
+import { LinePath, AreaClosed } from '@visx/shape';
+import { AxisLeft, AxisBottom } from '@visx/axis';
+import { GridRows, GridColumns } from '@visx/grid';
+import { Group } from '@visx/group';
+import { localPoint } from '@visx/event';
+import { Zoom } from '@visx/zoom';
+import { RectClipPath } from '@visx/clip-path';
+import { curveMonotoneX } from '@visx/curve';
+import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
+import { bisector } from 'd3-array';
 
 interface PayoffChartProps {
     widgetId: string;
 }
 
+// Tooltip styles matching dark theme
+const tooltipStyles = {
+    ...defaultStyles,
+    background: 'rgba(13, 17, 23, 0.95)',
+    border: '1px solid rgba(88, 166, 255, 0.3)',
+    color: '#e6edf3',
+    fontSize: '12px',
+    padding: '8px 12px',
+    borderRadius: '8px',
+};
+
 export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
-    const chartRef = useRef<HTMLDivElement>(null);
-    const chartInstance = useRef<any>(null);
-    const [echarts, setEcharts] = useState<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 400, height: 300 });
 
     // Store connections
     const sourcesMap = useTradesSelectionStore(state => state.sources);
@@ -27,6 +46,12 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     // Live price
     const { btcPrice, isConnected } = useLivePriceStore();
     const livePrice = btcPrice || 95000;
+
+    // Tooltip state
+    const { showTooltip, hideTooltip, tooltipOpen, tooltipData, tooltipLeft, tooltipTop } = useTooltip<{
+        price: number;
+        values: { label: string; value: number; color: string }[];
+    }>();
 
     // Get connected sources
     const connectedSources = useMemo(() => {
@@ -55,13 +80,6 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     const [showExpiry, setShowExpiry] = useState(true);
     const [showNow, setShowNow] = useState(true);
 
-    // Load ECharts dynamically (SSR-safe)
-    useEffect(() => {
-        import('echarts').then(mod => {
-            setEcharts(mod);
-        });
-    }, []);
-
     // Auto-detect DTE
     useEffect(() => {
         if (connectedSources.length > 0 && connectedSources[0].trades.length > 0) {
@@ -75,7 +93,25 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         }
     }, [connectedSources]);
 
+    // Responsive sizing
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setDimensions({ width, height });
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+
     const hasData = connectedSources.length > 0;
+    const margin = { top: 20, right: 20, bottom: 50, left: 65 };
+    const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
+    const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
     // Calculate P&L for each source
     const chartData = useMemo(() => {
@@ -88,8 +124,8 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         const r = 0.05;
 
         const sourcesData = connectedSources.map(source => {
-            const expiryPayoffs: number[] = [];
-            const currentPayoffs: number[] = [];
+            const expiryPayoffs: { price: number; pnl: number }[] = [];
+            const currentPayoffs: { price: number; pnl: number }[] = [];
 
             for (const spotPrice of prices) {
                 let expiryPnL = 0;
@@ -118,211 +154,100 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                     currentPnL += isLong ? (currentValue - cost) : (cost - currentValue);
                 }
 
-                expiryPayoffs.push(expiryPnL);
-                currentPayoffs.push(currentPnL);
+                expiryPayoffs.push({ price: spotPrice, pnl: expiryPnL });
+                currentPayoffs.push({ price: spotPrice, pnl: currentPnL });
             }
 
             const spotIdx = prices.findIndex(p => p >= livePrice) || Math.floor(prices.length / 2);
-            const pnlAtSpot = expiryPayoffs[spotIdx] || 0;
+            const pnlAtSpot = expiryPayoffs[spotIdx]?.pnl || 0;
 
-            return { source, prices, expiryPayoffs, currentPayoffs, pnlAtSpot };
+            return { source, expiryPayoffs, currentPayoffs, pnlAtSpot };
         });
 
-        return { prices, sourcesData };
+        // Calculate bounds
+        const allPnLs = sourcesData.flatMap(d => [...d.expiryPayoffs.map(p => p.pnl), ...d.currentPayoffs.map(p => p.pnl)]);
+        const minPnL = Math.min(...allPnLs) * 1.1;
+        const maxPnL = Math.max(...allPnLs) * 1.1;
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+
+        return { prices, sourcesData, minPnL, maxPnL, minPrice, maxPrice };
     }, [connectedSources, livePrice, daysToExpiry, hasData]);
 
     const totalPnL = chartData?.sourcesData.reduce((sum, d) => sum + d.pnlAtSpot, 0) || 0;
     const isProfitable = totalPnL >= 0;
 
-    // Initialize and update ECharts
-    useEffect(() => {
-        if (!chartRef.current || !echarts) return;
+    // Initial transform for zoom
+    const initialTransform = {
+        scaleX: 1,
+        scaleY: 1,
+        translateX: 0,
+        translateY: 0,
+        skewX: 0,
+        skewY: 0,
+    };
 
-        if (!chartInstance.current) {
-            chartInstance.current = echarts.init(chartRef.current, 'dark');
-        }
+    // Bisector for tooltip
+    const bisectPrice = bisector<{ price: number; pnl: number }, number>(d => d.price).left;
 
-        const chart = chartInstance.current;
-        const prices = chartData?.prices || [];
-        const series: any[] = [];
+    // Handle tooltip
+    const handleTooltip = useCallback(
+        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
+            if (!chartData) return;
 
-        chartData?.sourcesData.forEach(data => {
-            if (showExpiry) {
-                series.push({
-                    name: `${data.source.label} Expiry`,
-                    type: 'line',
-                    data: data.expiryPayoffs.map((v, i) => [prices[i], v]),
-                    smooth: true,
-                    symbol: 'none',
-                    lineStyle: { color: data.source.color || '#a855f7', width: 2 },
-                    areaStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(34, 197, 94, 0.3)' },
-                            { offset: 0.5, color: 'rgba(0, 0, 0, 0)' },
-                            { offset: 1, color: 'rgba(239, 68, 68, 0.3)' },
-                        ]),
-                    },
-                });
-            }
+            const point = localPoint(event);
+            if (!point) return;
 
-            if (showNow) {
-                series.push({
-                    name: `${data.source.label} Now`,
-                    type: 'line',
-                    data: data.currentPayoffs.map((v, i) => [prices[i], v]),
-                    smooth: true,
-                    symbol: 'none',
-                    lineStyle: { color: '#22d3ee', width: 2, type: 'dashed' },
-                });
-            }
-        });
+            const x = point.x - margin.left;
+            const price = xScale.invert(x);
 
-        // Zero line and current price marker
-        series.push({
-            name: 'Breakeven',
-            type: 'line',
-            markLine: { silent: true, symbol: 'none', lineStyle: { color: '#58a6ff', type: 'solid', width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
-            data: [],
-        });
+            const values = chartData.sourcesData.flatMap(data => {
+                const result: { label: string; value: number; color: string }[] = [];
 
-        if (livePrice && prices.length > 0) {
-            series.push({
-                name: 'Current Price',
-                type: 'line',
-                markLine: { silent: true, symbol: 'none', lineStyle: { color: '#fbbf24', type: 'dashed', width: 2 }, data: [{ xAxis: livePrice }], label: { formatter: '${c}', color: '#fbbf24' } },
-                data: [],
-            });
-        }
-
-        const option = {
-            backgroundColor: 'transparent',
-            animation: true,
-            animationDuration: 300,
-            grid: { left: 65, right: 35, top: 20, bottom: 60 }, // Extra right space for Y slider
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(13, 17, 23, 0.95)',
-                borderColor: 'rgba(88, 166, 255, 0.3)',
-                textStyle: { color: '#e6edf3' },
-                axisPointer: { type: 'none' }, // NO CROSSHAIR
-                valueFormatter: (value: number) => '$' + value.toFixed(2),
-            },
-            xAxis: {
-                type: 'value',
-                name: 'Underlying Price',
-                nameLocation: 'center',
-                nameGap: 30,
-                axisLine: { lineStyle: { color: '#484f58' } },
-                axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { show: false },
-            },
-            yAxis: {
-                type: 'value',
-                name: 'P&L ($)',
-                axisLine: { lineStyle: { color: '#484f58' } },
-                axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { show: false },
-            },
-            // Standard Toolbox for power users (Zoom Box, Reset, Save)
-            toolbox: {
-                show: true,
-                itemSize: 12,
-                top: 5,
-                right: 35, // Left of Y slider
-                feature: {
-                    dataZoom: {
-                        title: { zoom: 'Box Zoom', back: 'Undo Zoom' }
-                    },
-                    restore: { title: 'Reset View' },
-                    saveAsImage: { title: 'Save Image', name: 'payoff_chart' }
-                },
-                iconStyle: {
-                    borderColor: '#7d8590'
-                }
-            },
-            dataZoom: [
-                // Inside zoom/pan - scroll zooms, shift+drag pans
-                {
-                    type: 'inside',
-                    xAxisIndex: 0,
-                    yAxisIndex: 0,
-                    zoomOnMouseWheel: true,       // Scroll = zoom both axes
-                    moveOnMouseWheel: false,      // Don't pan on scroll
-                    moveOnMouseMove: 'shift',     // SHIFT + drag = pan
-                    preventDefaultMouseMove: false,
-                    filterMode: 'none',
-                },
-                // X-axis slider (bottom)
-                {
-                    type: 'slider',
-                    xAxisIndex: 0,
-                    height: 20,
-                    bottom: 5,
-                    borderColor: 'transparent',
-                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
-                    fillerColor: 'rgba(88, 166, 255, 0.3)',
-                    handleStyle: { color: '#58a6ff', borderColor: '#58a6ff' },
-                    textStyle: { color: '#7d8590', fontSize: 9 },
-                    showDetail: false,
-                },
-                // Y-axis slider (right side)
-                {
-                    type: 'slider',
-                    yAxisIndex: 0,
-                    width: 20,
-                    right: 5,
-                    borderColor: 'transparent',
-                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
-                    fillerColor: 'rgba(139, 92, 246, 0.3)',
-                    handleStyle: { color: '#8b5cf6', borderColor: '#8b5cf6' },
-                    textStyle: { color: '#7d8590', fontSize: 9 },
-                    showDetail: false,
-                },
-            ],
-            series,
-        };
-
-        // Use notMerge: false to PRESERVE dataZoom state during updates!
-        chart.setOption(option, { notMerge: false, lazyUpdate: true });
-
-        // Handle resize with error protection
-        let resizeObserver: ResizeObserver | null = null;
-        try {
-            resizeObserver = new ResizeObserver(() => {
-                try {
-                    if (chart && !chart.isDisposed()) {
-                        chart.resize();
+                if (showExpiry) {
+                    const idx = bisectPrice(data.expiryPayoffs, price, 1);
+                    const d0 = data.expiryPayoffs[idx - 1];
+                    const d1 = data.expiryPayoffs[idx];
+                    const d = d1 && price - d0?.price > d1.price - price ? d1 : d0;
+                    if (d) {
+                        result.push({ label: `${data.source.label} Expiry`, value: d.pnl, color: data.source.color || '#a855f7' });
                     }
-                } catch (e) {
-                    console.warn('Chart resize error:', e);
                 }
+
+                if (showNow) {
+                    const idx = bisectPrice(data.currentPayoffs, price, 1);
+                    const d0 = data.currentPayoffs[idx - 1];
+                    const d1 = data.currentPayoffs[idx];
+                    const d = d1 && price - d0?.price > d1.price - price ? d1 : d0;
+                    if (d) {
+                        result.push({ label: `${data.source.label} Now`, value: d.pnl, color: '#22d3ee' });
+                    }
+                }
+
+                return result;
             });
-            if (chartRef.current) {
-                resizeObserver.observe(chartRef.current);
-            }
-        } catch (e) {
-            console.warn('ResizeObserver error:', e);
-        }
 
-        return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
-        };
-    }, [chartData, showExpiry, showNow, livePrice, echarts]);
+            showTooltip({
+                tooltipData: { price, values },
+                tooltipLeft: point.x,
+                tooltipTop: point.y,
+            });
+        },
+        [chartData, showExpiry, showNow, showTooltip, margin.left, bisectPrice]
+    );
 
-    useEffect(() => {
-        return () => {
-            try {
-                if (chartInstance.current && !chartInstance.current.isDisposed()) {
-                    chartInstance.current.dispose();
-                }
-            } catch (e) {
-                console.warn('Chart dispose error:', e);
-            }
-            chartInstance.current = null;
-        };
-    }, []);
+    if (!hasData) {
+        return (
+            <div className="h-full flex flex-col bg-transparent">
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                        <p className="text-sm">Connect a Market Screener</p>
+                        <p className="text-xs mt-1">to visualize P&L curves</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col bg-transparent">
@@ -352,22 +277,292 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 </div>
             </div>
 
-            {/* Chart - with explicit event handling to prevent React Flow interference */}
-            <div className="flex-1 min-h-0">
-                {!echarts ? (
-                    <div className="flex items-center justify-center h-full text-gray-500">Loading chart...</div>
-                ) : (
-                    <div
-                        ref={chartRef}
-                        className="nodrag nowheel nopan"
-                        style={{ width: '100%', height: '100%' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseMove={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    />
+            {/* Chart - SVG based for smooth interactions */}
+            <div
+                ref={containerRef}
+                className="flex-1 min-h-0 nodrag nowheel nopan"
+                style={{ touchAction: 'none' }}
+            >
+                {chartData && innerWidth > 0 && innerHeight > 0 && (
+                    <Zoom<SVGSVGElement>
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        scaleXMin={0.5}
+                        scaleXMax={10}
+                        scaleYMin={0.5}
+                        scaleYMax={10}
+                        initialTransformMatrix={initialTransform}
+                    >
+                        {(zoom) => {
+                            // Create scales with zoom transform applied
+                            const xScale = scaleLinear({
+                                domain: [chartData.minPrice, chartData.maxPrice],
+                                range: [0, innerWidth],
+                            });
+
+                            const yScale = scaleLinear({
+                                domain: [chartData.minPnL, chartData.maxPnL],
+                                range: [innerHeight, 0],
+                            });
+
+                            // Apply zoom transformation to scales
+                            const zoomedXScale = scaleLinear({
+                                domain: xScale.domain().map(d => (d - zoom.transformMatrix.translateX / zoom.transformMatrix.scaleX) / zoom.transformMatrix.scaleX * zoom.transformMatrix.scaleX + zoom.transformMatrix.translateX / zoom.transformMatrix.scaleX),
+                                range: [0, innerWidth],
+                            });
+
+                            return (
+                                <svg
+                                    width={dimensions.width}
+                                    height={dimensions.height}
+                                    ref={zoom.containerRef}
+                                    style={{ cursor: zoom.isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                                    onMouseDown={zoom.dragStart}
+                                    onMouseMove={(e) => {
+                                        zoom.dragMove(e);
+                                        if (!zoom.isDragging) {
+                                            handleTooltip(e, xScale, yScale);
+                                        }
+                                    }}
+                                    onMouseUp={zoom.dragEnd}
+                                    onMouseLeave={() => {
+                                        zoom.dragEnd();
+                                        hideTooltip();
+                                    }}
+                                    onTouchStart={zoom.dragStart}
+                                    onTouchMove={zoom.dragMove}
+                                    onTouchEnd={zoom.dragEnd}
+                                    onWheel={(e) => {
+                                        e.stopPropagation();
+                                        const point = localPoint(e);
+                                        if (point) {
+                                            zoom.scale({ scaleX: e.deltaY > 0 ? 0.95 : 1.05, scaleY: e.deltaY > 0 ? 0.95 : 1.05, point });
+                                        }
+                                    }}
+                                >
+                                    <RectClipPath id={`chart-clip-${widgetId}`} width={innerWidth} height={innerHeight} />
+
+                                    {/* Background */}
+                                    <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
+
+                                    <Group left={margin.left} top={margin.top}>
+                                        {/* Apply zoom transform */}
+                                        <g transform={zoom.toString()}>
+                                            {/* Grid */}
+                                            <GridRows
+                                                scale={yScale}
+                                                width={innerWidth}
+                                                stroke="rgba(72, 79, 88, 0.3)"
+                                                strokeDasharray="2,2"
+                                            />
+                                            <GridColumns
+                                                scale={xScale}
+                                                height={innerHeight}
+                                                stroke="rgba(72, 79, 88, 0.3)"
+                                                strokeDasharray="2,2"
+                                            />
+
+                                            {/* Zero line */}
+                                            <line
+                                                x1={0}
+                                                x2={innerWidth}
+                                                y1={yScale(0)}
+                                                y2={yScale(0)}
+                                                stroke="#58a6ff"
+                                                strokeWidth={1}
+                                            />
+
+                                            {/* Current price line */}
+                                            <line
+                                                x1={xScale(livePrice)}
+                                                x2={xScale(livePrice)}
+                                                y1={0}
+                                                y2={innerHeight}
+                                                stroke="#fbbf24"
+                                                strokeWidth={2}
+                                                strokeDasharray="5,5"
+                                            />
+                                            <text
+                                                x={xScale(livePrice)}
+                                                y={-5}
+                                                fill="#fbbf24"
+                                                fontSize={10}
+                                                textAnchor="middle"
+                                            >
+                                                ${livePrice.toLocaleString()}
+                                            </text>
+
+                                            {/* P&L curves */}
+                                            {chartData.sourcesData.map((data, idx) => (
+                                                <g key={data.source.sourceId}>
+                                                    {showExpiry && (
+                                                        <>
+                                                            {/* Fill area for expiry */}
+                                                            <AreaClosed
+                                                                data={data.expiryPayoffs}
+                                                                x={d => xScale(d.price)}
+                                                                y={d => yScale(d.pnl)}
+                                                                yScale={yScale}
+                                                                curve={curveMonotoneX}
+                                                                fill={`url(#gradient-${idx})`}
+                                                                opacity={0.3}
+                                                            />
+                                                            {/* Line for expiry */}
+                                                            <LinePath
+                                                                data={data.expiryPayoffs}
+                                                                x={d => xScale(d.price)}
+                                                                y={d => yScale(d.pnl)}
+                                                                stroke={data.source.color || '#a855f7'}
+                                                                strokeWidth={2}
+                                                                curve={curveMonotoneX}
+                                                            />
+                                                        </>
+                                                    )}
+                                                    {showNow && (
+                                                        <LinePath
+                                                            data={data.currentPayoffs}
+                                                            x={d => xScale(d.price)}
+                                                            y={d => yScale(d.pnl)}
+                                                            stroke="#22d3ee"
+                                                            strokeWidth={2}
+                                                            strokeDasharray="5,5"
+                                                            curve={curveMonotoneX}
+                                                        />
+                                                    )}
+                                                </g>
+                                            ))}
+
+                                            {/* Gradient definitions */}
+                                            <defs>
+                                                {chartData.sourcesData.map((data, idx) => (
+                                                    <linearGradient key={idx} id={`gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+                                                        <stop offset="50%" stopColor="transparent" stopOpacity={0} />
+                                                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                                                    </linearGradient>
+                                                ))}
+                                            </defs>
+                                        </g>
+
+                                        {/* Axes (outside zoom transform so they stay fixed) */}
+                                        <AxisLeft
+                                            scale={yScale}
+                                            stroke="#484f58"
+                                            tickStroke="#484f58"
+                                            tickLabelProps={() => ({
+                                                fill: '#7d8590',
+                                                fontSize: 10,
+                                                textAnchor: 'end',
+                                                dy: '0.33em',
+                                                dx: -4,
+                                            })}
+                                            tickFormat={(v) => `$${Number(v).toLocaleString()}`}
+                                            numTicks={5}
+                                        />
+                                        <AxisBottom
+                                            scale={xScale}
+                                            top={innerHeight}
+                                            stroke="#484f58"
+                                            tickStroke="#484f58"
+                                            tickLabelProps={() => ({
+                                                fill: '#7d8590',
+                                                fontSize: 10,
+                                                textAnchor: 'middle',
+                                            })}
+                                            tickFormat={(v) => `$${Number(v).toLocaleString()}`}
+                                            numTicks={5}
+                                        />
+
+                                        {/* Axis labels */}
+                                        <text
+                                            x={innerWidth / 2}
+                                            y={innerHeight + 40}
+                                            fill="#7d8590"
+                                            fontSize={11}
+                                            textAnchor="middle"
+                                        >
+                                            Underlying Price
+                                        </text>
+                                        <text
+                                            x={-innerHeight / 2}
+                                            y={-50}
+                                            fill="#7d8590"
+                                            fontSize={11}
+                                            textAnchor="middle"
+                                            transform="rotate(-90)"
+                                        >
+                                            P&L ($)
+                                        </text>
+                                    </Group>
+
+                                    {/* Zoom controls */}
+                                    <Group top={margin.top + 5} left={dimensions.width - 80}>
+                                        <rect
+                                            x={0}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => zoom.scale({ scaleX: 1.2, scaleY: 1.2 })}
+                                        />
+                                        <text x={12} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>+</text>
+
+                                        <rect
+                                            x={28}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => zoom.scale({ scaleX: 0.8, scaleY: 0.8 })}
+                                        />
+                                        <text x={40} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>−</text>
+
+                                        <rect
+                                            x={56}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={zoom.reset}
+                                        />
+                                        <text x={68} y={16} fill="#7d8590" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>⟲</text>
+                                    </Group>
+                                </svg>
+                            );
+                        }}
+                    </Zoom>
                 )}
             </div>
+
+            {/* Tooltip */}
+            {tooltipOpen && tooltipData && (
+                <TooltipWithBounds
+                    left={tooltipLeft}
+                    top={tooltipTop}
+                    style={tooltipStyles}
+                >
+                    <div className="font-mono text-xs">
+                        <div className="text-gray-400 mb-1">Price: ${tooltipData.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        {tooltipData.values.map((v, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span style={{ color: v.color }}>{v.label}:</span>
+                                <span className={v.value >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                    {v.value >= 0 ? '+' : ''}${v.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </TooltipWithBounds>
+            )}
 
             {/* Footer */}
             <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
@@ -384,6 +579,9 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                             </div>
                         );
                     })}
+                    <div className="ml-auto text-gray-500 text-[10px]">
+                        Scroll to zoom • Drag to pan • Click +/− to zoom
+                    </div>
                 </div>
             </div>
         </div>

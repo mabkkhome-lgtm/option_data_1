@@ -1,14 +1,22 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Zap } from 'lucide-react';
 import { useTradesSelectionStore, TradeSource } from '@/stores/tradesSelection';
 import { useLivePriceStore } from '@/stores/livePrice';
 import { calculateGreeks, generatePriceRange } from '@/lib/options/blackScholes';
 
-/**
- * GreeksViz Widget - ECharts Version (SSR-Safe)
- */
+// Visx imports for smooth SVG charting (like Thales)
+import { scaleLinear } from '@visx/scale';
+import { LinePath, AreaClosed } from '@visx/shape';
+import { AxisLeft, AxisBottom } from '@visx/axis';
+import { GridRows, GridColumns } from '@visx/grid';
+import { Group } from '@visx/group';
+import { localPoint } from '@visx/event';
+import { Zoom } from '@visx/zoom';
+import { curveMonotoneX } from '@visx/curve';
+import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
+import { bisector } from 'd3-array';
 
 type GreekType = 'delta' | 'gamma' | 'theta' | 'vega';
 
@@ -19,7 +27,7 @@ interface GreeksVizProps {
 interface SourceGreeksData {
     source: TradeSource;
     prices: number[];
-    greeks: Record<GreekType, number[]>;
+    greeks: Record<GreekType, { price: number; value: number }[]>;
     greeksAtSpot: Record<GreekType, number>;
 }
 
@@ -30,10 +38,27 @@ const greekColors: Record<GreekType, string> = {
     vega: '#fbbf24',
 };
 
+const greekLabels: Record<GreekType, string> = {
+    delta: 'Δ Delta',
+    gamma: 'Γ Gamma',
+    theta: 'Θ Theta',
+    vega: 'ν Vega',
+};
+
+// Tooltip styles matching dark theme
+const tooltipStyles = {
+    ...defaultStyles,
+    background: 'rgba(13, 17, 23, 0.95)',
+    border: '1px solid rgba(88, 166, 255, 0.3)',
+    color: '#e6edf3',
+    fontSize: '12px',
+    padding: '8px 12px',
+    borderRadius: '8px',
+};
+
 export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
-    const chartRef = useRef<HTMLDivElement>(null);
-    const chartInstance = useRef<any>(null);
-    const [echarts, setEcharts] = useState<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 400, height: 300 });
 
     // Store connections
     const sourcesMap = useTradesSelectionStore(state => state.sources);
@@ -43,6 +68,12 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     // Live price
     const { btcPrice, isConnected } = useLivePriceStore();
     const livePrice = btcPrice || 95000;
+
+    // Tooltip state
+    const { showTooltip, hideTooltip, tooltipOpen, tooltipData, tooltipLeft, tooltipTop } = useTooltip<{
+        price: number;
+        values: { label: string; value: number; color: string }[];
+    }>();
 
     // Get connected sources
     const connectedSources = useMemo(() => {
@@ -75,13 +106,6 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     });
     const [daysToExpiry, setDaysToExpiry] = useState(30);
 
-    // Load ECharts dynamically (SSR-safe)
-    useEffect(() => {
-        import('echarts').then(mod => {
-            setEcharts(mod);
-        });
-    }, []);
-
     // Auto-detect DTE
     useEffect(() => {
         if (connectedSources.length > 0 && connectedSources[0].trades.length > 0) {
@@ -95,7 +119,29 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         }
     }, [connectedSources]);
 
+    // Responsive sizing
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setDimensions({ width, height });
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+
     const hasData = connectedSources.length > 0;
+    const margin = { top: 20, right: 20, bottom: 50, left: 65 };
+    const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
+    const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
+
+    const toggleGreek = (greek: GreekType) => {
+        setVisibleGreeks(prev => ({ ...prev, [greek]: !prev[greek] }));
+    };
 
     // Calculate Greeks for each source
     const perSourceData = useMemo((): SourceGreeksData[] => {
@@ -108,7 +154,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         const T = Math.max(0.001, daysToExpiry / 365);
 
         return connectedSources.map(source => {
-            const greeks: Record<GreekType, number[]> = {
+            const greeks: Record<GreekType, { price: number; value: number }[]> = {
                 delta: [], gamma: [], theta: [], vega: []
             };
             const greeksAtSpot: Record<GreekType, number> = {
@@ -133,211 +179,114 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                     vegaSum += g.vega * multiplier;
                 }
 
-                greeks.delta.push(deltaSum);
-                greeks.gamma.push(gammaSum);
-                greeks.theta.push(thetaSum);
-                greeks.vega.push(vegaSum);
+                greeks.delta.push({ price, value: deltaSum });
+                greeks.gamma.push({ price, value: gammaSum });
+                greeks.theta.push({ price, value: thetaSum });
+                greeks.vega.push({ price, value: vegaSum });
             }
 
             const spotIdx = Math.floor(prices.length / 2);
-            greeksAtSpot.delta = greeks.delta[spotIdx] || 0;
-            greeksAtSpot.gamma = greeks.gamma[spotIdx] || 0;
-            greeksAtSpot.theta = greeks.theta[spotIdx] || 0;
-            greeksAtSpot.vega = greeks.vega[spotIdx] || 0;
+            greeksAtSpot.delta = greeks.delta[spotIdx]?.value || 0;
+            greeksAtSpot.gamma = greeks.gamma[spotIdx]?.value || 0;
+            greeksAtSpot.theta = greeks.theta[spotIdx]?.value || 0;
+            greeksAtSpot.vega = greeks.vega[spotIdx]?.value || 0;
 
             return { source, prices, greeks, greeksAtSpot };
         });
     }, [connectedSources, livePrice, daysToExpiry, hasData]);
 
-    const toggleGreek = (greek: GreekType) => {
-        setVisibleGreeks(prev => ({ ...prev, [greek]: !prev[greek] }));
+    // Calculate chart bounds
+    const chartBounds = useMemo(() => {
+        if (perSourceData.length === 0) return { minX: 0, maxX: 100, minY: -1, maxY: 1 };
+
+        const allPrices = perSourceData[0]?.prices || [];
+        const minX = Math.min(...allPrices);
+        const maxX = Math.max(...allPrices);
+
+        let minY = 0;
+        let maxY = 0;
+
+        for (const sourceData of perSourceData) {
+            for (const greek of Object.keys(visibleGreeks) as GreekType[]) {
+                if (visibleGreeks[greek]) {
+                    const values = sourceData.greeks[greek].map(d => d.value);
+                    minY = Math.min(minY, ...values);
+                    maxY = Math.max(maxY, ...values);
+                }
+            }
+        }
+
+        // Add padding
+        const yPadding = (maxY - minY) * 0.1 || 0.1;
+        return { minX, maxX, minY: minY - yPadding, maxY: maxY + yPadding };
+    }, [perSourceData, visibleGreeks]);
+
+    // Initial transform for zoom
+    const initialTransform = {
+        scaleX: 1,
+        scaleY: 1,
+        translateX: 0,
+        translateY: 0,
+        skewX: 0,
+        skewY: 0,
     };
 
-    // Initialize and update ECharts
-    useEffect(() => {
-        if (!chartRef.current || !echarts) return;
+    // Bisector for tooltip
+    const bisectPrice = bisector<{ price: number; value: number }, number>(d => d.price).left;
 
-        // Initialize chart
-        if (!chartInstance.current) {
-            chartInstance.current = echarts.init(chartRef.current, 'dark');
-        }
+    // Handle tooltip
+    const handleTooltip = useCallback(
+        (event: React.MouseEvent | React.TouchEvent, xScale: any) => {
+            if (perSourceData.length === 0) return;
 
-        const chart = chartInstance.current;
-        const priceRange = perSourceData[0]?.prices || [];
+            const point = localPoint(event);
+            if (!point) return;
 
-        // Build series data
-        const series: any[] = [];
+            const x = point.x - margin.left;
+            const price = xScale.invert(x);
 
-        perSourceData.forEach(data => {
-            (Object.keys(greekColors) as GreekType[]).forEach(greek => {
-                if (visibleGreeks[greek]) {
-                    series.push({
-                        name: `${data.source.label} ${greek}`,
-                        type: 'line',
-                        data: data.greeks[greek].map((v, i) => [priceRange[i], v]),
-                        smooth: true,
-                        symbol: 'none',
-                        lineStyle: {
-                            color: greekColors[greek],
-                            width: 2,
-                        },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: greekColors[greek] + '40' },
-                                { offset: 1, color: greekColors[greek] + '00' },
-                            ]),
-                        },
-                    });
-                }
-            });
-        });
+            const values: { label: string; value: number; color: string }[] = [];
 
-        // Add current price marker
-        if (livePrice && priceRange.length > 0) {
-            series.push({
-                name: 'Current Price',
-                type: 'line',
-                markLine: {
-                    silent: true,
-                    symbol: 'none',
-                    lineStyle: { color: '#fbbf24', type: 'dashed', width: 2 },
-                    data: [{ xAxis: livePrice }],
-                    label: { formatter: '${c}', color: '#fbbf24' },
-                },
-                data: [],
-            });
-        }
-
-        const option = {
-            backgroundColor: 'transparent',
-            animation: true,
-            animationDuration: 300,
-            grid: { left: 60, right: 35, top: 20, bottom: 60 }, // Extra right space for Y slider
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(13, 17, 23, 0.95)',
-                borderColor: 'rgba(88, 166, 255, 0.3)',
-                textStyle: { color: '#e6edf3' },
-                axisPointer: { type: 'none' }, // NO CROSSHAIR
-                valueFormatter: (value: number) => typeof value === 'number' ? value.toFixed(2) : value,
-            },
-            xAxis: {
-                type: 'value',
-                name: 'Price',
-                nameLocation: 'center',
-                nameGap: 30,
-                axisLine: { lineStyle: { color: '#484f58' } },
-                axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
-                splitLine: { show: false },
-            },
-            yAxis: {
-                type: 'value',
-                axisLine: { lineStyle: { color: '#484f58' } },
-                axisLabel: { color: '#7d8590' },
-                splitLine: { show: false },
-            },
-            // Standard Toolbox for power users (Zoom Box, Reset, Save)
-            toolbox: {
-                show: true,
-                itemSize: 12,
-                top: 5,
-                right: 35, // Left of Y slider
-                feature: {
-                    dataZoom: {
-                        // Allow zooming both axes with the box selection tool
-                        title: { zoom: 'Box Zoom', back: 'Undo Zoom' }
-                    },
-                    restore: { title: 'Reset View' },
-                    saveAsImage: { title: 'Save Image', name: 'greeks_viz' }
-                },
-                iconStyle: {
-                    borderColor: '#7d8590'
-                }
-            },
-            dataZoom: [
-                // Inside zoom/pan - scroll zooms, shift+drag pans
-                {
-                    type: 'inside',
-                    xAxisIndex: 0,
-                    yAxisIndex: 0,
-                    zoomOnMouseWheel: true,       // Scroll = zoom both axes
-                    moveOnMouseWheel: false,      // Don't pan on scroll
-                    moveOnMouseMove: 'shift',     // SHIFT + drag = pan
-                    preventDefaultMouseMove: false,
-                    filterMode: 'none',
-                },
-                // X-axis slider (bottom)
-                {
-                    type: 'slider',
-                    xAxisIndex: 0,
-                    height: 20,
-                    bottom: 5,
-                    borderColor: 'transparent',
-                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
-                    fillerColor: 'rgba(88, 166, 255, 0.3)',
-                    handleStyle: { color: '#58a6ff', borderColor: '#58a6ff' },
-                    textStyle: { color: '#7d8590', fontSize: 9 },
-                    showDetail: false,
-                },
-                // Y-axis slider (right side)
-                {
-                    type: 'slider',
-                    yAxisIndex: 0,
-                    width: 20,
-                    right: 5,
-                    borderColor: 'transparent',
-                    backgroundColor: 'rgba(48, 54, 61, 0.4)',
-                    fillerColor: 'rgba(139, 92, 246, 0.3)',
-                    handleStyle: { color: '#8b5cf6', borderColor: '#8b5cf6' },
-                    textStyle: { color: '#7d8590', fontSize: 9 },
-                    showDetail: false,
-                },
-            ],
-            series,
-        };
-
-        // Use notMerge: false to PRESERVE dataZoom state during updates!
-        chart.setOption(option, { notMerge: false, lazyUpdate: true });
-
-        // Handle resize with error protection
-        let resizeObserver: ResizeObserver | null = null;
-        try {
-            resizeObserver = new ResizeObserver(() => {
-                try {
-                    if (chart && !chart.isDisposed()) {
-                        chart.resize();
+            for (const sourceData of perSourceData) {
+                for (const greek of Object.keys(visibleGreeks) as GreekType[]) {
+                    if (visibleGreeks[greek]) {
+                        const data = sourceData.greeks[greek];
+                        const idx = bisectPrice(data, price, 1);
+                        const d0 = data[idx - 1];
+                        const d1 = data[idx];
+                        const d = d1 && price - d0?.price > d1.price - price ? d1 : d0;
+                        if (d) {
+                            values.push({
+                                label: `${sourceData.source.label} ${greek.charAt(0).toUpperCase() + greek.slice(1)}`,
+                                value: d.value,
+                                color: greekColors[greek],
+                            });
+                        }
                     }
-                } catch (e) {
-                    console.warn('Chart resize error:', e);
                 }
+            }
+
+            showTooltip({
+                tooltipData: { price, values },
+                tooltipLeft: point.x,
+                tooltipTop: point.y,
             });
-            if (chartRef.current) {
-                resizeObserver.observe(chartRef.current);
-            }
-        } catch (e) {
-            console.warn('ResizeObserver error:', e);
-        }
+        },
+        [perSourceData, visibleGreeks, showTooltip, margin.left, bisectPrice]
+    );
 
-        return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
-        };
-    }, [perSourceData, visibleGreeks, livePrice, echarts]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            try {
-                if (chartInstance.current && !chartInstance.current.isDisposed()) {
-                    chartInstance.current.dispose();
-                }
-            } catch (e) {
-                console.warn('Chart dispose error:', e);
-            }
-            chartInstance.current = null;
-        };
-    }, []);
+    if (!hasData) {
+        return (
+            <div className="h-full flex flex-col bg-transparent">
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                        <p className="text-sm">Connect a Market Screener</p>
+                        <p className="text-xs mt-1">to visualize Greeks</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col bg-transparent">
@@ -346,18 +295,22 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
                     <Zap size={12} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
                     <span className="text-xs text-gray-400">BTC</span>
-                    <span className="text-sm font-mono font-bold text-white">
-                        ${livePrice.toLocaleString()}
-                    </span>
+                    <span className="text-sm font-mono font-bold text-white">${livePrice.toLocaleString()}</span>
                 </div>
 
                 <div className="flex items-center gap-1">
-                    {(['delta', 'gamma', 'theta', 'vega'] as GreekType[]).map((greek) => (
+                    {(Object.keys(greekColors) as GreekType[]).map(greek => (
                         <button
                             key={greek}
                             onClick={() => toggleGreek(greek)}
-                            className={`text-[10px] px-2 py-0.5 rounded font-medium transition-all ${visibleGreeks[greek] ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                            style={visibleGreeks[greek] ? { borderBottom: `2px solid ${greekColors[greek]}` } : {}}
+                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${visibleGreeks[greek]
+                                    ? 'text-white'
+                                    : 'text-gray-600 hover:text-gray-400'
+                                }`}
+                            style={{
+                                backgroundColor: visibleGreeks[greek] ? greekColors[greek] + '40' : 'transparent',
+                                borderColor: greekColors[greek],
+                            }}
                         >
                             {greek.charAt(0).toUpperCase() + greek.slice(1)}
                         </button>
@@ -371,45 +324,279 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                         value={daysToExpiry}
                         onChange={(e) => setDaysToExpiry(Math.max(1, Math.min(365, Number(e.target.value))))}
                         className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-cyan-500/30 text-center"
-                        min="1" max="365"
+                        min="1"
+                        max="365"
                     />
                 </div>
             </div>
 
-            {/* Chart - with explicit event handling to prevent React Flow interference */}
-            <div className="flex-1 min-h-0">
-                {!echarts ? (
-                    <div className="flex items-center justify-center h-full text-gray-500">Loading chart...</div>
-                ) : (
-                    <div
-                        ref={chartRef}
-                        className="nodrag nowheel nopan"
-                        style={{ width: '100%', height: '100%' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseMove={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    />
+            {/* Chart - SVG based for smooth interactions */}
+            <div
+                ref={containerRef}
+                className="flex-1 min-h-0 nodrag nowheel nopan"
+                style={{ touchAction: 'none' }}
+            >
+                {innerWidth > 0 && innerHeight > 0 && (
+                    <Zoom<SVGSVGElement>
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        scaleXMin={0.5}
+                        scaleXMax={10}
+                        scaleYMin={0.5}
+                        scaleYMax={10}
+                        initialTransformMatrix={initialTransform}
+                    >
+                        {(zoom) => {
+                            // Create scales
+                            const xScale = scaleLinear({
+                                domain: [chartBounds.minX, chartBounds.maxX],
+                                range: [0, innerWidth],
+                            });
+
+                            const yScale = scaleLinear({
+                                domain: [chartBounds.minY, chartBounds.maxY],
+                                range: [innerHeight, 0],
+                            });
+
+                            return (
+                                <svg
+                                    width={dimensions.width}
+                                    height={dimensions.height}
+                                    ref={zoom.containerRef}
+                                    style={{ cursor: zoom.isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                                    onMouseDown={zoom.dragStart}
+                                    onMouseMove={(e) => {
+                                        zoom.dragMove(e);
+                                        if (!zoom.isDragging) {
+                                            handleTooltip(e, xScale);
+                                        }
+                                    }}
+                                    onMouseUp={zoom.dragEnd}
+                                    onMouseLeave={() => {
+                                        zoom.dragEnd();
+                                        hideTooltip();
+                                    }}
+                                    onTouchStart={zoom.dragStart}
+                                    onTouchMove={zoom.dragMove}
+                                    onTouchEnd={zoom.dragEnd}
+                                    onWheel={(e) => {
+                                        e.stopPropagation();
+                                        const point = localPoint(e);
+                                        if (point) {
+                                            zoom.scale({ scaleX: e.deltaY > 0 ? 0.95 : 1.05, scaleY: e.deltaY > 0 ? 0.95 : 1.05, point });
+                                        }
+                                    }}
+                                >
+                                    {/* Background */}
+                                    <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
+
+                                    <Group left={margin.left} top={margin.top}>
+                                        {/* Apply zoom transform */}
+                                        <g transform={zoom.toString()}>
+                                            {/* Grid */}
+                                            <GridRows
+                                                scale={yScale}
+                                                width={innerWidth}
+                                                stroke="rgba(72, 79, 88, 0.3)"
+                                                strokeDasharray="2,2"
+                                            />
+                                            <GridColumns
+                                                scale={xScale}
+                                                height={innerHeight}
+                                                stroke="rgba(72, 79, 88, 0.3)"
+                                                strokeDasharray="2,2"
+                                            />
+
+                                            {/* Zero line */}
+                                            <line
+                                                x1={0}
+                                                x2={innerWidth}
+                                                y1={yScale(0)}
+                                                y2={yScale(0)}
+                                                stroke="#58a6ff"
+                                                strokeWidth={1}
+                                            />
+
+                                            {/* Current price line */}
+                                            <line
+                                                x1={xScale(livePrice)}
+                                                x2={xScale(livePrice)}
+                                                y1={0}
+                                                y2={innerHeight}
+                                                stroke="#fbbf24"
+                                                strokeWidth={2}
+                                                strokeDasharray="5,5"
+                                            />
+                                            <text
+                                                x={xScale(livePrice)}
+                                                y={-5}
+                                                fill="#fbbf24"
+                                                fontSize={10}
+                                                textAnchor="middle"
+                                            >
+                                                ${livePrice.toLocaleString()}
+                                            </text>
+
+                                            {/* Greek curves */}
+                                            {perSourceData.map((sourceData) => (
+                                                <g key={sourceData.source.sourceId}>
+                                                    {(Object.keys(greekColors) as GreekType[]).map(greek => {
+                                                        if (!visibleGreeks[greek]) return null;
+                                                        return (
+                                                            <g key={greek}>
+                                                                {/* Area fill */}
+                                                                <AreaClosed
+                                                                    data={sourceData.greeks[greek]}
+                                                                    x={d => xScale(d.price)}
+                                                                    y={d => yScale(d.value)}
+                                                                    yScale={yScale}
+                                                                    curve={curveMonotoneX}
+                                                                    fill={greekColors[greek]}
+                                                                    opacity={0.15}
+                                                                />
+                                                                {/* Line */}
+                                                                <LinePath
+                                                                    data={sourceData.greeks[greek]}
+                                                                    x={d => xScale(d.price)}
+                                                                    y={d => yScale(d.value)}
+                                                                    stroke={greekColors[greek]}
+                                                                    strokeWidth={2}
+                                                                    curve={curveMonotoneX}
+                                                                />
+                                                            </g>
+                                                        );
+                                                    })}
+                                                </g>
+                                            ))}
+                                        </g>
+
+                                        {/* Axes (outside zoom transform so they stay fixed) */}
+                                        <AxisLeft
+                                            scale={yScale}
+                                            stroke="#484f58"
+                                            tickStroke="#484f58"
+                                            tickLabelProps={() => ({
+                                                fill: '#7d8590',
+                                                fontSize: 10,
+                                                textAnchor: 'end',
+                                                dy: '0.33em',
+                                                dx: -4,
+                                            })}
+                                            tickFormat={(v) => Number(v).toFixed(2)}
+                                            numTicks={5}
+                                        />
+                                        <AxisBottom
+                                            scale={xScale}
+                                            top={innerHeight}
+                                            stroke="#484f58"
+                                            tickStroke="#484f58"
+                                            tickLabelProps={() => ({
+                                                fill: '#7d8590',
+                                                fontSize: 10,
+                                                textAnchor: 'middle',
+                                            })}
+                                            tickFormat={(v) => `$${Number(v).toLocaleString()}`}
+                                            numTicks={5}
+                                        />
+
+                                        {/* Axis labels */}
+                                        <text
+                                            x={innerWidth / 2}
+                                            y={innerHeight + 40}
+                                            fill="#7d8590"
+                                            fontSize={11}
+                                            textAnchor="middle"
+                                        >
+                                            Underlying Price
+                                        </text>
+                                    </Group>
+
+                                    {/* Zoom controls */}
+                                    <Group top={margin.top + 5} left={dimensions.width - 80}>
+                                        <rect
+                                            x={0}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => zoom.scale({ scaleX: 1.2, scaleY: 1.2 })}
+                                        />
+                                        <text x={12} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>+</text>
+
+                                        <rect
+                                            x={28}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => zoom.scale({ scaleX: 0.8, scaleY: 0.8 })}
+                                        />
+                                        <text x={40} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>−</text>
+
+                                        <rect
+                                            x={56}
+                                            y={0}
+                                            width={24}
+                                            height={24}
+                                            rx={4}
+                                            fill="rgba(13, 17, 23, 0.8)"
+                                            stroke="rgba(88, 166, 255, 0.3)"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={zoom.reset}
+                                        />
+                                        <text x={68} y={16} fill="#7d8590" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>⟲</text>
+                                    </Group>
+                                </svg>
+                            );
+                        }}
+                    </Zoom>
                 )}
             </div>
 
-            {/* Footer */}
+            {/* Tooltip */}
+            {tooltipOpen && tooltipData && (
+                <TooltipWithBounds
+                    left={tooltipLeft}
+                    top={tooltipTop}
+                    style={tooltipStyles}
+                >
+                    <div className="font-mono text-xs">
+                        <div className="text-gray-400 mb-1">Price: ${tooltipData.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        {tooltipData.values.map((v, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span style={{ color: v.color }}>{v.label}:</span>
+                                <span className="text-white">{v.value.toFixed(4)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </TooltipWithBounds>
+            )}
+
+            {/* Footer - Greek values at current spot */}
             <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
-                <div className="grid grid-cols-4 gap-2 text-xs">
+                <div className="flex items-center gap-4 text-xs">
                     {perSourceData.map(data => (
-                        (Object.keys(greekColors) as GreekType[]).map((greek) => (
-                            visibleGreeks[greek] && (
-                                <div key={`${data.source.sourceId}-${greek}`} className="flex items-center justify-between bg-black/30 rounded px-2 py-1">
-                                    <span style={{ color: greekColors[greek] }} className="font-medium">{greek.charAt(0).toUpperCase()}</span>
-                                    <span className="font-mono text-white">
-                                        {greek === 'gamma' ? data.greeksAtSpot[greek].toFixed(6) :
-                                            greek === 'delta' ? data.greeksAtSpot[greek].toFixed(2) :
-                                                `$${data.greeksAtSpot[greek].toFixed(2)}`}
+                        <div key={data.source.sourceId} className="flex items-center gap-3">
+                            <span style={{ color: data.source.color }} className="font-medium">{data.source.label}:</span>
+                            {(Object.keys(greekColors) as GreekType[]).map(greek => {
+                                if (!visibleGreeks[greek]) return null;
+                                return (
+                                    <span key={greek} className="font-mono" style={{ color: greekColors[greek] }}>
+                                        {greek.charAt(0).toUpperCase()}: {data.greeksAtSpot[greek].toFixed(3)}
                                     </span>
-                                </div>
-                            )
-                        ))
+                                );
+                            })}
+                        </div>
                     ))}
+                    <div className="ml-auto text-gray-500 text-[10px]">
+                        Scroll to zoom • Drag to pan
+                    </div>
                 </div>
             </div>
         </div>
