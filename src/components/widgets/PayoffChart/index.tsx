@@ -223,41 +223,32 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 axisLabel: { color: '#7d8590', formatter: (v: number) => '$' + v.toLocaleString() },
                 splitLine: { show: false },
             },
-            // Toolbox for brush zoom (drag to zoom)
+            // Standard Toolbox for power users (Zoom Box, Reset, Save)
             toolbox: {
-                show: false, // Hidden, but brush still works
+                show: true,
+                itemSize: 12,
+                top: 5,
+                right: 35, // Left of Y slider
                 feature: {
                     dataZoom: {
-                        yAxisIndex: 'none',
+                        title: { zoom: 'Box Zoom', back: 'Undo Zoom' }
                     },
+                    restore: { title: 'Reset View' },
+                    saveAsImage: { title: 'Save Image', name: 'payoff_chart' }
                 },
-            },
-            // Brush for directional zoom - drag horizontal/vertical
-            brush: {
-                toolbox: ['lineX', 'lineY', 'clear'],
-                brushLink: 'all',
-                xAxisIndex: 0,
-                yAxisIndex: 0,
-                brushStyle: {
-                    borderWidth: 1,
-                    color: 'rgba(88, 166, 255, 0.2)',
-                    borderColor: 'rgba(88, 166, 255, 0.8)',
-                },
-                outOfBrush: {
-                    colorAlpha: 0.1,
-                },
-                // Auto-detect drag direction
-                brushMode: 'single',
+                iconStyle: {
+                    borderColor: '#7d8590'
+                }
             },
             dataZoom: [
-                // Combined inside zoom - scroll zooms both axes naturally
+                // Combined inside zoom - scroll zooms both axes naturally, drag pans
                 {
                     type: 'inside',
                     xAxisIndex: 0,
                     yAxisIndex: 0,
                     zoomOnMouseWheel: true,    // Scroll = natural zoom (both)
-                    moveOnMouseWheel: false,
-                    moveOnMouseMove: false,    // Disable drag-to-pan (we want drag-to-zoom)
+                    moveOnMouseWheel: false,   // Don't pan on scroll (standard)
+                    moveOnMouseMove: true,     // DRAG TO PAN - Enabled (Standard behavior)
                     preventDefaultMouseMove: true,
                     filterMode: 'none',
                 },
