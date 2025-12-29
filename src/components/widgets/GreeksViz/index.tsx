@@ -255,16 +255,17 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 }
             },
             dataZoom: [
-                // Combined inside zoom - scroll zooms both axes naturally, drag pans
+                // Inside zoom/pan - scroll zooms, drag pans
                 {
                     type: 'inside',
                     xAxisIndex: 0,
                     yAxisIndex: 0,
-                    zoomOnMouseWheel: true,    // Scroll = natural zoom (both)
-                    moveOnMouseWheel: false,   // Don't pan on scroll (standard)
-                    moveOnMouseMove: true,     // DRAG TO PAN - Enabled (Standard behavior)
-                    preventDefaultMouseMove: true,
+                    zoomOnMouseWheel: true,       // Scroll = zoom
+                    moveOnMouseWheel: false,      // Don't pan on scroll
+                    moveOnMouseMove: false,       // Don't pan on hover (only on drag)
+                    preventDefaultMouseMove: false, // CRITICAL: Allow drag events to work
                     filterMode: 'none',
+                    // Drag to pan is enabled by default when moveOnMouseMove is false
                 },
                 // X-axis slider (bottom)
                 {
