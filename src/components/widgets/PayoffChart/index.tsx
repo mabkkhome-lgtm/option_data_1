@@ -200,18 +200,26 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     // Bisector for tooltip
     const bisectPrice = bisector<{ price: number; pnl: number }, number>(d => d.price).left;
 
-    // Handle tooltip and crosshair
+    // Handle tooltip and crosshair - now accounts for zoom transform
     const handleTooltip = useCallback(
-        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
+        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any, zoomTransform: { scaleX: number; scaleY: number; translateX: number; translateY: number }) => {
             if (!chartData) return;
 
             const point = localPoint(event);
             if (!point) return;
 
-            const x = point.x - margin.left;
-            const y = point.y - margin.top;
-            const price = xScale.invert(x);
-            const pnlValue = yScale.invert(y);
+            // Get mouse position relative to chart area
+            const mouseX = point.x - margin.left;
+            const mouseY = point.y - margin.top;
+
+            // Apply inverse zoom transform to get the actual data coordinates
+            const { scaleX, scaleY, translateX, translateY } = zoomTransform;
+            const dataX = (mouseX - translateX) / scaleX;
+            const dataY = (mouseY - translateY) / scaleY;
+
+            // Convert to data values using the original scales
+            const price = xScale.invert(dataX);
+            const pnlValue = yScale.invert(dataY);
 
             // Get P&L values at this price point
             const values = chartData.sourcesData.flatMap(data => {
@@ -243,10 +251,10 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             // Get the primary P&L value (from first source's expiry if available)
             const primaryPnL = values.length > 0 ? values[0].value : pnlValue;
 
-            // Update crosshair position
+            // Update crosshair position - use screen coordinates for visual position
             setCrosshairPos({
-                x: Math.max(0, Math.min(innerWidth, x)),
-                y: Math.max(0, Math.min(innerHeight, y)),
+                x: Math.max(0, Math.min(innerWidth, mouseX)),
+                y: Math.max(0, Math.min(innerHeight, mouseY)),
                 price,
                 pnl: primaryPnL,
             });
@@ -346,7 +354,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     onMouseMove={(e) => {
                                         zoom.dragMove(e);
                                         if (!zoom.isDragging) {
-                                            handleTooltip(e, xScale, yScale);
+                                            handleTooltip(e, xScale, yScale, zoom.transformMatrix);
                                         }
                                     }}
                                     onMouseUp={zoom.dragEnd}
