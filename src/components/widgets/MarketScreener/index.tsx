@@ -345,12 +345,22 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             let oiMap = new Map<string, number>();
             try {
                 const tickers = await deribitService.getAllTickers(currency);
-                tickers.forEach(ticker => {
-                    oiMap.set(ticker.instrument_name, ticker.open_interest);
-                });
-                console.log(`[MarketScreener] Fetched OI for ${oiMap.size} instruments`);
+                console.log(`[MarketScreener] Got ${tickers?.length || 0} tickers from API`);
+                if (tickers && Array.isArray(tickers)) {
+                    tickers.forEach(ticker => {
+                        if (ticker.instrument_name && ticker.open_interest !== undefined) {
+                            oiMap.set(ticker.instrument_name, ticker.open_interest);
+                        }
+                    });
+                }
+                console.log(`[MarketScreener] Mapped OI for ${oiMap.size} instruments`);
+                // Debug: log first few entries
+                if (oiMap.size > 0) {
+                    const sample = Array.from(oiMap.entries()).slice(0, 3);
+                    console.log('[MarketScreener] OI sample:', sample);
+                }
             } catch (oiErr) {
-                console.warn('[MarketScreener] Failed to fetch OI data:', oiErr);
+                console.error('[MarketScreener] Failed to fetch OI data:', oiErr);
             }
 
             const annotatedRows = rows.map(row => {
