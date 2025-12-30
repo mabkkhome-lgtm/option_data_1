@@ -95,27 +95,41 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         }
     }, [connectedSources]);
 
-    // Responsive sizing
+    // Responsive sizing - improved resize detection
     useEffect(() => {
         if (!containerRef.current) return;
 
-        // Set initial dimensions immediately
-        const rect = containerRef.current.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-            setDimensions({ width: rect.width, height: rect.height });
-        }
-
-        const resizeObserver = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                const { width, height } = entry.contentRect;
-                if (width > 0 && height > 0) {
-                    setDimensions({ width, height });
-                }
+        // Function to update dimensions
+        const updateDimensions = () => {
+            if (!containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                setDimensions({ width: rect.width, height: rect.height });
             }
+        };
+
+        // Set initial dimensions
+        updateDimensions();
+
+        // Use ResizeObserver with requestAnimationFrame for smooth updates
+        let rafId: number | null = null;
+        const resizeObserver = new ResizeObserver(() => {
+            // Cancel any pending animation frame
+            if (rafId) cancelAnimationFrame(rafId);
+            // Schedule update on next frame for smooth rendering
+            rafId = requestAnimationFrame(updateDimensions);
         });
 
         resizeObserver.observe(containerRef.current);
-        return () => resizeObserver.disconnect();
+
+        // Also listen to window resize as backup
+        window.addEventListener('resize', updateDimensions);
+
+        return () => {
+            resizeObserver.disconnect();
+            window.removeEventListener('resize', updateDimensions);
+            if (rafId) cancelAnimationFrame(rafId);
+        };
     }, []);
 
     const hasData = connectedSources.length > 0;
