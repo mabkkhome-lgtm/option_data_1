@@ -40,6 +40,7 @@ export interface ScreenerRow {
     timestamp: Date;
     blockTradeId?: string;
     underlying?: number;
+    openInterest?: number;  // Open Interest for this instrument
     // Strategy detection
     strategyId?: string;
     strategyName?: string;
@@ -47,7 +48,7 @@ export interface ScreenerRow {
     isBlockTrade?: boolean;
 }
 
-type SortField = 'timestamp' | 'size' | 'price' | 'strike' | 'iv' | 'expiry' | 'priceUSD';
+type SortField = 'timestamp' | 'size' | 'price' | 'strike' | 'iv' | 'expiry' | 'priceUSD' | 'openInterest';
 type SortDirection = 'asc' | 'desc';
 
 // Parse expiry string to Date
@@ -340,17 +341,30 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                 });
             });
 
+            // Fetch Open Interest data for all instruments
+            let oiMap = new Map<string, number>();
+            try {
+                const tickers = await deribitService.getAllTickers(currency);
+                tickers.forEach(ticker => {
+                    oiMap.set(ticker.instrument_name, ticker.open_interest);
+                });
+                console.log(`[MarketScreener] Fetched OI for ${oiMap.size} instruments`);
+            } catch (oiErr) {
+                console.warn('[MarketScreener] Failed to fetch OI data:', oiErr);
+            }
+
             const annotatedRows = rows.map(row => {
                 const stratInfo = strategyLegIds.get(row.id);
-                if (stratInfo) {
-                    return {
-                        ...row,
+                const openInterest = oiMap.get(row.instrumentName);
+                return {
+                    ...row,
+                    openInterest,
+                    ...(stratInfo && {
                         strategyId: stratInfo.id,
                         strategyName: stratInfo.name,
                         strategyColor: stratInfo.color,
-                    };
-                }
-                return row;
+                    }),
+                };
             });
 
             setTrades(annotatedRows);
@@ -443,6 +457,9 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                     break;
                 case 'expiry':
                     comparison = a.expiryDate.getTime() - b.expiryDate.getTime();
+                    break;
+                case 'openInterest':
+                    comparison = (a.openInterest || 0) - (b.openInterest || 0);
                     break;
             }
             return sortDirection === 'asc' ? comparison : -comparison;
@@ -879,6 +896,13 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                             >
                                 IV
                             </th>
+                            <th
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                onClick={() => handleSort('openInterest')}
+                                title="Open Interest"
+                            >
+                                OI
+                            </th>
                             <th className="p-1.5 text-left">Strategy</th>
                             <th
                                 className="p-1.5 text-left cursor-pointer hover:text-accent-primary"
@@ -925,6 +949,9 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                                 <td className="p-1.5 text-right font-mono">{formatPrice(trade.priceUSD)}</td>
                                 <td className="p-1.5 text-right font-mono text-accent-primary font-medium">
                                     {trade.iv ? `${trade.iv.toFixed(0)}%` : '-'}
+                                </td>
+                                <td className="p-1.5 text-right font-mono text-cyan-400" title="Open Interest">
+                                    {trade.openInterest ? trade.openInterest.toLocaleString() : '-'}
                                 </td>
                                 <td className="p-1.5">
                                     <div className="flex items-center gap-1">
