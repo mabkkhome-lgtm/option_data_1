@@ -190,16 +190,16 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             const startTimestamp = startDate.getTime();
             const endTimestamp = endDate.getTime();
 
-            // Try Deribit API first (recent trades) - fetch up to 1000 per call (API max)
+            // Try Deribit API first - fetch ALL trades (no limit), paginate until done
             let apiTrades: any[] = [];
             try {
-                // Fetch multiple pages if needed
+                // Fetch all pages - no limit
                 let hasMore = true;
                 let lastTimestamp = endTimestamp;
-                let totalFetched = 0;
-                const maxTrades = 2000; // Fetch up to 2000 trades total
+                let pageCount = 0;
 
-                while (hasMore && totalFetched < maxTrades) {
+                while (hasMore) {
+                    pageCount++;
                     const result = await deribitService.getTradesByCurrency(
                         currency,
                         'option',
@@ -210,15 +210,22 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
 
                     if (result?.trades && result.trades.length > 0) {
                         apiTrades = [...apiTrades, ...result.trades];
-                        totalFetched += result.trades.length;
                         // Get timestamp of oldest trade for next page
-                        lastTimestamp = result.trades[result.trades.length - 1].timestamp - 1;
-                        hasMore = result.has_more && result.trades.length === 1000;
+                        const oldestTimestamp = result.trades[result.trades.length - 1].timestamp;
+
+                        // Stop if we've reached trades before our start date
+                        if (oldestTimestamp <= startTimestamp) {
+                            hasMore = false;
+                        } else {
+                            lastTimestamp = oldestTimestamp - 1;
+                            // Continue only if API indicates more data AND we got a full page
+                            hasMore = result.has_more && result.trades.length === 1000;
+                        }
                     } else {
                         hasMore = false;
                     }
                 }
-                console.log(`[MarketScreener] Fetched ${apiTrades.length} trades from API in ${Math.ceil(totalFetched / 1000)} calls`);
+                console.log(`[MarketScreener] Fetched ${apiTrades.length} trades from API in ${pageCount} calls`);
             } catch (apiErr) {
                 console.warn('[MarketScreener] Deribit API error, trying database:', apiErr);
             }
@@ -231,7 +238,7 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                         currency: currency as 'BTC' | 'ETH',
                         startDate: startDate,
                         endDate: endDate,
-                        limit: 1000,
+                        limit: 10000, // Get as many historical trades as possible
                     });
                     dbTrades = dbResult.map(t => ({
                         trade_id: t.trade_id,
