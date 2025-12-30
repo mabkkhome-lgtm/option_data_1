@@ -295,9 +295,9 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     // Bisector for tooltip
     const bisectPrice = bisector<{ price: number; value: number }, number>(d => d.price).left;
 
-    // Handle tooltip and crosshair - now accounts for zoom transform
+    // Handle tooltip and crosshair - scales are already zoomed so just use them directly
     const handleTooltip = useCallback(
-        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any, zoomTransform: { scaleX: number; scaleY: number; translateX: number; translateY: number }) => {
+        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
             if (perSourceData.length === 0) return;
 
             const point = localPoint(event);
@@ -307,15 +307,9 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
 
-            // Apply inverse zoom transform to get the actual data coordinates
-            // The chart is rendered with transform, so we need to reverse it
-            const { scaleX, scaleY, translateX, translateY } = zoomTransform;
-            const dataX = (mouseX - translateX) / scaleX;
-            const dataY = (mouseY - translateY) / scaleY;
-
-            // Convert to data values using the original scales
-            const price = xScale.invert(dataX);
-            const yValue = yScale.invert(dataY);
+            // Scales are already zoomed, so we can directly convert mouse position to data values
+            const price = xScale.invert(mouseX);
+            const yValue = yScale.invert(mouseY);
 
             const values: { label: string; value: number; color: string }[] = [];
 
@@ -341,7 +335,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             // Get primary value for crosshair label
             const primaryValue = values.length > 0 ? values[0].value : yValue;
 
-            // For crosshair position, use the screen coordinates (where mouse actually is)
+            // Crosshair position
             setCrosshairPos({
                 x: Math.max(0, Math.min(innerWidth, mouseX)),
                 y: Math.max(0, Math.min(innerHeight, mouseY)),
@@ -430,14 +424,41 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                         initialTransformMatrix={initialTransform}
                     >
                         {(zoom) => {
-                            // Create scales
-                            const xScale = scaleLinear({
+                            // Base scales (unzoomed)
+                            const baseXScale = scaleLinear({
                                 domain: [chartBounds.minX, chartBounds.maxX],
                                 range: [0, innerWidth],
                             });
 
-                            const yScale = scaleLinear({
+                            const baseYScale = scaleLinear({
                                 domain: [chartBounds.minY, chartBounds.maxY],
+                                range: [innerHeight, 0],
+                            });
+
+                            // Derive zoomed domains from transform
+                            // When chart is transformed, the visible range changes
+                            const { scaleX, scaleY, translateX, translateY } = zoom.transformMatrix;
+
+                            // Calculate new visible domain based on inverse transform
+                            // visibleMin = baseScale.invert(-translateX / scaleX)
+                            // visibleMax = baseScale.invert((innerWidth - translateX) / scaleX)
+                            const zoomedXDomain = [
+                                baseXScale.invert(-translateX / scaleX),
+                                baseXScale.invert((innerWidth - translateX) / scaleX),
+                            ];
+                            const zoomedYDomain = [
+                                baseYScale.invert((innerHeight - translateY) / scaleY),
+                                baseYScale.invert(-translateY / scaleY),
+                            ];
+
+                            // Create zoomed scales for axes and tooltip (shows actual visible range)
+                            const xScale = scaleLinear({
+                                domain: zoomedXDomain,
+                                range: [0, innerWidth],
+                            });
+
+                            const yScale = scaleLinear({
+                                domain: zoomedYDomain,
                                 range: [innerHeight, 0],
                             });
 
@@ -451,7 +472,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                     onMouseMove={(e) => {
                                         zoom.dragMove(e);
                                         if (!zoom.isDragging) {
-                                            handleTooltip(e, xScale, yScale, zoom.transformMatrix);
+                                            handleTooltip(e, xScale, yScale);
                                         }
                                     }}
                                     onMouseUp={zoom.dragEnd}
@@ -475,8 +496,8 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                     <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
                                     <Group left={margin.left} top={margin.top}>
-                                        {/* Apply zoom transform */}
-                                        <g transform={zoom.toString()}>
+                                        {/* Chart content - uses zoomed scales directly, NO transform */}
+                                        <g>
                                             {/* Grid */}
                                             <GridRows
                                                 scale={yScale}

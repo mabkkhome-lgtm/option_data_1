@@ -200,9 +200,9 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     // Bisector for tooltip
     const bisectPrice = bisector<{ price: number; pnl: number }, number>(d => d.price).left;
 
-    // Handle tooltip and crosshair - now accounts for zoom transform
+    // Handle tooltip and crosshair - scales are already zoomed so just use them directly
     const handleTooltip = useCallback(
-        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any, zoomTransform: { scaleX: number; scaleY: number; translateX: number; translateY: number }) => {
+        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
             if (!chartData) return;
 
             const point = localPoint(event);
@@ -212,14 +212,9 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
 
-            // Apply inverse zoom transform to get the actual data coordinates
-            const { scaleX, scaleY, translateX, translateY } = zoomTransform;
-            const dataX = (mouseX - translateX) / scaleX;
-            const dataY = (mouseY - translateY) / scaleY;
-
-            // Convert to data values using the original scales
-            const price = xScale.invert(dataX);
-            const pnlValue = yScale.invert(dataY);
+            // Scales are already zoomed, so directly convert to data values
+            const price = xScale.invert(mouseX);
+            const pnlValue = yScale.invert(mouseY);
 
             // Get P&L values at this price point
             const values = chartData.sourcesData.flatMap(data => {
@@ -251,7 +246,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             // Get the primary P&L value (from first source's expiry if available)
             const primaryPnL = values.length > 0 ? values[0].value : pnlValue;
 
-            // Update crosshair position - use screen coordinates for visual position
+            // Update crosshair position
             setCrosshairPos({
                 x: Math.max(0, Math.min(innerWidth, mouseX)),
                 y: Math.max(0, Math.min(innerHeight, mouseY)),
@@ -327,21 +322,38 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                         initialTransformMatrix={initialTransform}
                     >
                         {(zoom) => {
-                            // Create scales with zoom transform applied
-                            const xScale = scaleLinear({
+                            // Base scales (unzoomed)
+                            const baseXScale = scaleLinear({
                                 domain: [chartData.minPrice, chartData.maxPrice],
                                 range: [0, innerWidth],
                             });
 
-                            const yScale = scaleLinear({
+                            const baseYScale = scaleLinear({
                                 domain: [chartData.minPnL, chartData.maxPnL],
                                 range: [innerHeight, 0],
                             });
 
-                            // Apply zoom transformation to scales
-                            const zoomedXScale = scaleLinear({
-                                domain: xScale.domain().map(d => (d - zoom.transformMatrix.translateX / zoom.transformMatrix.scaleX) / zoom.transformMatrix.scaleX * zoom.transformMatrix.scaleX + zoom.transformMatrix.translateX / zoom.transformMatrix.scaleX),
+                            // Derive zoomed domains from transform
+                            const { scaleX, scaleY, translateX, translateY } = zoom.transformMatrix;
+
+                            const zoomedXDomain = [
+                                baseXScale.invert(-translateX / scaleX),
+                                baseXScale.invert((innerWidth - translateX) / scaleX),
+                            ];
+                            const zoomedYDomain = [
+                                baseYScale.invert((innerHeight - translateY) / scaleY),
+                                baseYScale.invert(-translateY / scaleY),
+                            ];
+
+                            // Zoomed scales for axes and tooltip
+                            const xScale = scaleLinear({
+                                domain: zoomedXDomain,
                                 range: [0, innerWidth],
+                            });
+
+                            const yScale = scaleLinear({
+                                domain: zoomedYDomain,
+                                range: [innerHeight, 0],
                             });
 
                             return (
@@ -354,7 +366,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     onMouseMove={(e) => {
                                         zoom.dragMove(e);
                                         if (!zoom.isDragging) {
-                                            handleTooltip(e, xScale, yScale, zoom.transformMatrix);
+                                            handleTooltip(e, xScale, yScale);
                                         }
                                     }}
                                     onMouseUp={zoom.dragEnd}
@@ -380,8 +392,8 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
                                     <Group left={margin.left} top={margin.top}>
-                                        {/* Apply zoom transform */}
-                                        <g transform={zoom.toString()}>
+                                        {/* Chart content uses zoomed scales directly, NO transform */}
+                                        <g>
                                             {/* Grid */}
                                             <GridRows
                                                 scale={yScale}
