@@ -190,6 +190,8 @@ export const WidgetNode = memo(function WidgetNode({ id, data, selected }: NodeP
                         const newWidth = Math.max(widgetDef.size.minWidth, startWidth + moveEvent.clientX - startX);
                         const newHeight = Math.max(widgetDef.size.minHeight, startHeight + moveEvent.clientY - startY);
                         setSize({ width: newWidth, height: newHeight });
+                        // Dispatch resize event to notify charts
+                        window.dispatchEvent(new Event('resize'));
                     };
 
                     const handleMouseUp = () => {
