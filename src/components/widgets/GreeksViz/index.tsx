@@ -425,7 +425,11 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             <div
                 ref={containerRef}
                 className="flex-1 min-h-0 nodrag nowheel nopan"
-                style={{ touchAction: 'none', width: '100%', height: '100%', minHeight: '200px' }}
+                style={{
+                    touchAction: 'none',
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}
             >
                 {innerWidth > 0 && innerHeight > 0 && (
                     <Zoom<SVGSVGElement>
