@@ -190,19 +190,35 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
             const startTimestamp = startDate.getTime();
             const endTimestamp = endDate.getTime();
 
-            // Try Deribit API first (recent trades)
+            // Try Deribit API first (recent trades) - fetch up to 1000 per call (API max)
             let apiTrades: any[] = [];
             try {
-                const result = await deribitService.getTradesByCurrency(
-                    currency,
-                    'option',
-                    500,
-                    startTimestamp,
-                    endTimestamp
-                );
-                if (result?.trades) {
-                    apiTrades = result.trades;
+                // Fetch multiple pages if needed
+                let hasMore = true;
+                let lastTimestamp = endTimestamp;
+                let totalFetched = 0;
+                const maxTrades = 2000; // Fetch up to 2000 trades total
+
+                while (hasMore && totalFetched < maxTrades) {
+                    const result = await deribitService.getTradesByCurrency(
+                        currency,
+                        'option',
+                        1000, // Max per API call
+                        startTimestamp,
+                        lastTimestamp
+                    );
+
+                    if (result?.trades && result.trades.length > 0) {
+                        apiTrades = [...apiTrades, ...result.trades];
+                        totalFetched += result.trades.length;
+                        // Get timestamp of oldest trade for next page
+                        lastTimestamp = result.trades[result.trades.length - 1].timestamp - 1;
+                        hasMore = result.has_more && result.trades.length === 1000;
+                    } else {
+                        hasMore = false;
+                    }
                 }
+                console.log(`[MarketScreener] Fetched ${apiTrades.length} trades from API in ${Math.ceil(totalFetched / 1000)} calls`);
             } catch (apiErr) {
                 console.warn('[MarketScreener] Deribit API error, trying database:', apiErr);
             }
@@ -612,32 +628,32 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                 <div className="flex-1" />
 
                 {/* Thales-style Summary Stats */}
-                <div className="flex gap-3 text-xs">
-                    {/* Position counts by asset */}
-                    {Object.entries(summaryStats.assetCounts).map(([asset, count]) => (
-                        <div key={asset} className="text-center" title={`${asset} positions`}>
-                            <div className="text-foreground-muted text-[10px]">{asset}</div>
-                            <div className="font-mono font-bold text-cyan-400">{count}</div>
-                        </div>
-                    ))}
+                <div className="flex gap-4 text-xs">
+                    {/* Position Count */}
+                    <div className="text-center" title="Total number of positions">
+                        <div className="text-foreground-muted text-[10px]">Position Count</div>
+                        <div className="font-mono font-bold text-white text-sm">{selectedCount}</div>
+                    </div>
 
                     {/* Total Size */}
                     <div className="text-center" title="Total contract size">
-                        <div className="text-foreground-muted text-[10px]">Size</div>
-                        <div className="font-mono font-bold text-accent-primary">{summaryStats.totalSize.toFixed(1)}</div>
+                        <div className="text-foreground-muted text-[10px]">Total Size</div>
+                        <div className="font-mono font-bold text-white text-sm">{Math.round(summaryStats.totalSize).toLocaleString()}</div>
                     </div>
 
-                    {/* Entry Value */}
-                    <div className="text-center" title="Total entry value (premium × size)">
-                        <div className="text-foreground-muted text-[10px]">Entry</div>
-                        <div className="font-mono font-bold text-green-400">
-                            {summaryStats.totalEntryValue >= 1000
-                                ? `$${(summaryStats.totalEntryValue / 1000).toFixed(1)}K`
-                                : `$${summaryStats.totalEntryValue.toFixed(0)}`}
+                    {/* Total Entry Value */}
+                    <div className="text-center" title="Total entry value (premium paid)">
+                        <div className="text-foreground-muted text-[10px]">Total Entry Value</div>
+                        <div className="font-mono font-bold text-white text-sm">
+                            {summaryStats.totalEntryValue >= 1000000
+                                ? `${(summaryStats.totalEntryValue / 1000000).toFixed(1)}M`
+                                : summaryStats.totalEntryValue >= 1000
+                                    ? `${(summaryStats.totalEntryValue / 1000).toFixed(0)}K`
+                                    : summaryStats.totalEntryValue.toFixed(0)}
                         </div>
                     </div>
 
-                    <div className="w-px h-6 bg-border-color" />
+                    <div className="w-px h-8 bg-border-color" />
 
                     {/* Strategies */}
                     <div className="text-center" title="Detected strategies">
