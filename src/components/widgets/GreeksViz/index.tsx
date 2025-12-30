@@ -124,10 +124,18 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     useEffect(() => {
         if (!containerRef.current) return;
 
+        // Set initial dimensions immediately
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            setDimensions({ width: rect.width, height: rect.height });
+        }
+
         const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
-                setDimensions({ width, height });
+                if (width > 0 && height > 0) {
+                    setDimensions({ width, height });
+                }
             }
         });
 
@@ -348,7 +356,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             <div
                 ref={containerRef}
                 className="flex-1 min-h-0 nodrag nowheel nopan"
-                style={{ touchAction: 'none' }}
+                style={{ touchAction: 'none', width: '100%', height: '100%', minHeight: '200px' }}
             >
                 {innerWidth > 0 && innerHeight > 0 && (
                     <Zoom<SVGSVGElement>
