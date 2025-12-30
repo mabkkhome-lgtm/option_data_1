@@ -204,7 +204,35 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         });
     }, [connectedSources, livePrice, daysToExpiry, hasData]);
 
-    // Calculate chart bounds
+    // Calculate per-Greek scales for normalization (so each Greek is visible)
+    const greekScales = useMemo(() => {
+        const scales: Record<GreekType, { min: number; max: number; scale: number }> = {
+            delta: { min: 0, max: 0, scale: 1 },
+            gamma: { min: 0, max: 0, scale: 1 },
+            theta: { min: 0, max: 0, scale: 1 },
+            vega: { min: 0, max: 0, scale: 1 },
+        };
+
+        for (const sourceData of perSourceData) {
+            for (const greek of Object.keys(scales) as GreekType[]) {
+                const values = sourceData.greeks[greek].map(d => d.value);
+                if (values.length > 0) {
+                    scales[greek].min = Math.min(scales[greek].min, ...values);
+                    scales[greek].max = Math.max(scales[greek].max, ...values);
+                }
+            }
+        }
+
+        // Calculate scale factor for each Greek
+        for (const greek of Object.keys(scales) as GreekType[]) {
+            const range = scales[greek].max - scales[greek].min;
+            scales[greek].scale = range > 0 ? range : 1;
+        }
+
+        return scales;
+    }, [perSourceData]);
+
+    // Calculate chart bounds - use combined normalized range
     const chartBounds = useMemo(() => {
         if (perSourceData.length === 0) return { minX: 0, maxX: 100, minY: -1, maxY: 1 };
 
@@ -212,23 +240,47 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         const minX = Math.min(...allPrices);
         const maxX = Math.max(...allPrices);
 
-        let minY = 0;
-        let maxY = 0;
+        // Count how many Greeks are visible
+        const visibleGreeksList = (Object.keys(visibleGreeks) as GreekType[]).filter(g => visibleGreeks[g]);
 
-        for (const sourceData of perSourceData) {
-            for (const greek of Object.keys(visibleGreeks) as GreekType[]) {
-                if (visibleGreeks[greek]) {
-                    const values = sourceData.greeks[greek].map(d => d.value);
-                    minY = Math.min(minY, ...values);
-                    maxY = Math.max(maxY, ...values);
-                }
+        if (visibleGreeksList.length === 1) {
+            // Single Greek: use its actual range
+            const greek = visibleGreeksList[0];
+            let minY = 0, maxY = 0;
+            for (const sourceData of perSourceData) {
+                const values = sourceData.greeks[greek].map(d => d.value);
+                minY = Math.min(minY, ...values);
+                maxY = Math.max(maxY, ...values);
             }
+            const yPadding = (maxY - minY) * 0.1 || 0.1;
+            return { minX, maxX, minY: minY - yPadding, maxY: maxY + yPadding };
+        } else if (visibleGreeksList.length > 1) {
+            // Multiple Greeks: normalize to -1 to 1 range
+            return { minX, maxX, minY: -1.2, maxY: 1.2 };
         }
 
-        // Add padding
-        const yPadding = (maxY - minY) * 0.1 || 0.1;
-        return { minX, maxX, minY: minY - yPadding, maxY: maxY + yPadding };
+        return { minX, maxX, minY: -1, maxY: 1 };
     }, [perSourceData, visibleGreeks]);
+
+    // Get normalized data for a Greek (scales to -1 to 1 when multiple Greeks visible)
+    const getNormalizedGreekData = useCallback((greek: GreekType, data: { price: number; value: number }[]) => {
+        const visibleCount = (Object.keys(visibleGreeks) as GreekType[]).filter(g => visibleGreeks[g]).length;
+
+        if (visibleCount <= 1) {
+            // Single Greek: use raw values
+            return data;
+        }
+
+        // Multiple Greeks: normalize to -1 to 1
+        const scale = greekScales[greek];
+        const mid = (scale.max + scale.min) / 2;
+        const halfRange = scale.scale / 2 || 1;
+
+        return data.map(d => ({
+            price: d.price,
+            value: (d.value - mid) / halfRange, // Normalizes to roughly -1 to 1
+        }));
+    }, [visibleGreeks, greekScales]);
 
     // Initial transform for zoom
     const initialTransform = {
@@ -465,11 +517,12 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                                 <g key={sourceData.source.sourceId}>
                                                     {(Object.keys(greekColors) as GreekType[]).map(greek => {
                                                         if (!visibleGreeks[greek]) return null;
+                                                        const normalizedData = getNormalizedGreekData(greek, sourceData.greeks[greek]);
                                                         return (
                                                             <g key={greek}>
                                                                 {/* Area fill */}
                                                                 <AreaClosed
-                                                                    data={sourceData.greeks[greek]}
+                                                                    data={normalizedData}
                                                                     x={d => xScale(d.price)}
                                                                     y={d => yScale(d.value)}
                                                                     yScale={yScale}
@@ -479,7 +532,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                                                 />
                                                                 {/* Line */}
                                                                 <LinePath
-                                                                    data={sourceData.greeks[greek]}
+                                                                    data={normalizedData}
                                                                     x={d => xScale(d.price)}
                                                                     y={d => yScale(d.value)}
                                                                     stroke={greekColors[greek]}
@@ -699,6 +752,9 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                         </div>
                     ))}
                     <div className="ml-auto text-gray-500 text-[10px]">
+                        {(Object.values(visibleGreeks).filter(Boolean).length > 1) && (
+                            <span className="text-yellow-500 mr-2">📊 Normalized view</span>
+                        )}
                         Scroll to zoom • Drag to pan
                     </div>
                 </div>
