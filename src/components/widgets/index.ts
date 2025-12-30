@@ -10,3 +10,4 @@ export { IndexPriceWidget } from './IndexPrice';
 export { StrategyPresetsWidget } from './StrategyPresets';
 export { MarketScreenerWidget } from './MarketScreener';
 export { HeatmapWidget } from './Heatmap';
+export { CombinedChartWidget } from './CombinedChart';

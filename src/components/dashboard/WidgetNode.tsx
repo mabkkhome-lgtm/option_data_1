@@ -19,6 +19,7 @@ import { IndexPriceWidget } from '../widgets/IndexPrice';
 import { StrategyPresetsWidget } from '../widgets/StrategyPresets';
 import { MarketScreenerWidget } from '../widgets/MarketScreener';
 import { HeatmapWidget } from '../widgets/Heatmap';
+import { CombinedChartWidget } from '../widgets/CombinedChart';
 
 interface WidgetNodeData extends WidgetConfig {
     expanded?: boolean;
@@ -50,6 +51,8 @@ const WidgetComponent = memo(function WidgetComponent({ type, widgetId }: { type
             return <MarketScreenerWidget widgetId={widgetId} />;
         case 'heatmap':
             return <HeatmapWidget />;
+        case 'combined-chart':
+            return <CombinedChartWidget widgetId={widgetId} />;
         default:
             return (
                 <div className="text-foreground-muted text-sm p-4 text-center">

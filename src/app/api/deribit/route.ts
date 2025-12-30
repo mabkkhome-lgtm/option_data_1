@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            next: { revalidate: 30 }, // Cache for 30 seconds
+            next: { revalidate: 10 }, // Cache for 10 seconds only
         });
 
         if (!response.ok) {
@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: data.error.message }, { status: 400 });
         }
 
-        return NextResponse.json(data.result);
+        // Return with cache control headers to prevent stale data
+        return NextResponse.json(data.result, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+            },
+        });
     } catch (error) {
         console.error('Deribit API proxy error:', error);
         return NextResponse.json(

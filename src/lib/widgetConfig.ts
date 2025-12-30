@@ -105,6 +105,13 @@ export const WIDGET_DEFS: Record<string, WidgetDef> = {
         hasInput: false,
         hasOutput: false,
     },
+    'combined-chart': {
+        type: 'combined-chart',
+        title: 'Combined Chart',
+        size: { width: 600, height: 550, minWidth: 450, minHeight: 400 },
+        hasInput: true,
+        hasOutput: false,
+    },
 };
 
 // Default size for unknown widgets

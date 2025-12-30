@@ -44,6 +44,7 @@ const menuItems: { category: string; items: { type: WidgetType; title: string; i
         items: [
             { type: 'strategy-builder', title: 'Strategy Builder', icon: <Calculator size={16} /> },
             { type: 'strategy-presets', title: 'Strategy Presets', icon: <Layers size={16} /> },
+            { type: 'combined-chart', title: 'Combined Chart', icon: <LineChart size={16} /> },
             { type: 'payoff-chart', title: 'Payoff Chart', icon: <Activity size={16} /> },
             { type: 'greeks-viz', title: 'Greeks Visualizer', icon: <Grid size={16} /> },
         ],

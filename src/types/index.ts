@@ -95,7 +95,9 @@ export type WidgetType =
   | 'strategy-presets'
   | 'market-screener'
   | 'market-ticker'
-  | 'price-chart';
+  | 'price-chart'
+  | 'combined-chart'
+  | 'heatmap';
 
 export interface WidgetConfig {
   id: string;
