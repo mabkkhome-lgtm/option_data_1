@@ -388,19 +388,78 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                             <g clipPath={`url(#clip-${widgetId})`}>
                                 {(Object.keys(visibleGreeks) as GreekType[]).map(type => {
                                     if (!visibleGreeks[type]) return null;
-                                    return perSourceData.sources.map((src, idx) => (
-                                        <LinePath
-                                            key={`${src.label}-${type}`}
-                                            data={src.greeks[type]}
-                                            x={d => xScale(d.price)}
-                                            y={d => yScale(d.value)}
-                                            stroke={greekColors[type]}
-                                            strokeWidth={2}
-                                            strokeDasharray={idx === 0 ? '' : idx === 1 ? '5,5' : '2,2'}
-                                            curve={curveMonotoneX}
-                                            opacity={0.8}
-                                        />
-                                    ));
+                                    return perSourceData.sources.map((src, idx) => {
+                                        // Find Extrema for Gamma
+                                        let maxVal = -Infinity, minVal = Infinity;
+                                        let maxPrice = 0, minPrice = 0;
+
+                                        if (type === 'gamma') {
+                                            src.greeks[type].forEach(d => {
+                                                if (d.value > maxVal) { maxVal = d.value; maxPrice = d.price; }
+                                                if (d.value < minVal) { minVal = d.value; minPrice = d.price; }
+                                            });
+                                        }
+
+                                        return (
+                                            <g key={`${src.label}-${type}`}>
+                                                <LinePath
+                                                    data={src.greeks[type]}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.value)}
+                                                    stroke={greekColors[type]}
+                                                    strokeWidth={2}
+                                                    strokeDasharray={idx === 0 ? '' : idx === 1 ? '5,5' : '2,2'}
+                                                    curve={curveMonotoneX}
+                                                    opacity={0.8}
+                                                />
+                                                {/* Markers for Gamma */}
+                                                {type === 'gamma' && maxVal > -Infinity && (
+                                                    <g>
+                                                        <circle
+                                                            cx={xScale(maxPrice)}
+                                                            cy={yScale(maxVal)}
+                                                            r={3}
+                                                            fill={greekColors[type]}
+                                                            stroke="#fff"
+                                                            strokeWidth={1}
+                                                        />
+                                                        <text
+                                                            x={xScale(maxPrice)}
+                                                            y={yScale(maxVal) - 6}
+                                                            fill={greekColors[type]}
+                                                            fontSize={9}
+                                                            textAnchor="middle"
+                                                            fontWeight="bold"
+                                                        >
+                                                            Max Γ
+                                                        </text>
+                                                    </g>
+                                                )}
+                                                {type === 'gamma' && minVal < -0.1 && ( // Only show min if it's actually negative/significant
+                                                    <g>
+                                                        <circle
+                                                            cx={xScale(minPrice)}
+                                                            cy={yScale(minVal)}
+                                                            r={3}
+                                                            fill={greekColors[type]}
+                                                            stroke="#fff"
+                                                            strokeWidth={1}
+                                                        />
+                                                        <text
+                                                            x={xScale(minPrice)}
+                                                            y={yScale(minVal) + 12}
+                                                            fill={greekColors[type]}
+                                                            fontSize={9}
+                                                            textAnchor="middle"
+                                                            fontWeight="bold"
+                                                        >
+                                                            Min Γ
+                                                        </text>
+                                                    </g>
+                                                )}
+                                            </g>
+                                        );
+                                    });
                                 })}
                             </g>
 

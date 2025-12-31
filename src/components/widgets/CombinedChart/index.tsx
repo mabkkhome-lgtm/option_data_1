@@ -578,11 +578,22 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             {/* Current price line */}
                             <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.6)" strokeWidth={1} strokeDasharray="4,4" />
 
-                            {/* Curves per source */}
                             <g clipPath={`url(#clip-${widgetId})`}>
                                 {perSourceData.map((source, idx) => {
                                     const colors = getSourceColor(source.label, idx);
                                     const baseColor = source.color || colors.solid;
+
+                                    // Find Gamma Extrema
+                                    let maxGamma = -Infinity, minGamma = Infinity;
+                                    let maxGammaPrice = 0, minGammaPrice = 0;
+                                    let maxGammaVal = 0, minGammaVal = 0;
+
+                                    if (visibleCurves.gamma) {
+                                        source.gamma.forEach(d => {
+                                            if (d.value > maxGamma) { maxGamma = d.value; maxGammaPrice = d.price; maxGammaVal = d.value; }
+                                            if (d.value < minGamma) { minGamma = d.value; minGammaPrice = d.price; minGammaVal = d.value; }
+                                        });
+                                    }
 
                                     return (
                                         <g key={source.sourceId}>
@@ -624,15 +635,63 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             )}
                                             {/* Gamma - PURPLE, Scaled */}
                                             {visibleCurves.gamma && (
-                                                <LinePath
-                                                    data={source.gamma}
-                                                    x={d => xScale(d.price)}
-                                                    y={d => getGammaY(d.value)}
-                                                    stroke="#a855f7"
-                                                    strokeWidth={1.5}
-                                                    curve={curveMonotoneX}
-                                                    opacity={0.8}
-                                                />
+                                                <>
+                                                    <LinePath
+                                                        data={source.gamma}
+                                                        x={d => xScale(d.price)}
+                                                        y={d => getGammaY(d.value)}
+                                                        stroke="#a855f7"
+                                                        strokeWidth={1.5}
+                                                        curve={curveMonotoneX}
+                                                        opacity={0.8}
+                                                    />
+                                                    {/* Max Gamma Marker */}
+                                                    {maxGamma > -Infinity && (
+                                                        <g>
+                                                            <circle
+                                                                cx={xScale(maxGammaPrice)}
+                                                                cy={getGammaY(maxGammaVal)}
+                                                                r={3}
+                                                                fill="#a855f7"
+                                                                stroke="#fff"
+                                                                strokeWidth={1}
+                                                            />
+                                                            <text
+                                                                x={xScale(maxGammaPrice)}
+                                                                y={getGammaY(maxGammaVal) - 6}
+                                                                fill="#a855f7"
+                                                                fontSize={9}
+                                                                textAnchor="middle"
+                                                                fontWeight="bold"
+                                                            >
+                                                                Max Γ
+                                                            </text>
+                                                        </g>
+                                                    )}
+                                                    {/* Min Gamma Marker (only if significantly different from 0 or negative) */}
+                                                    {minGamma < 0 && (
+                                                        <g>
+                                                            <circle
+                                                                cx={xScale(minGammaPrice)}
+                                                                cy={getGammaY(minGammaVal)}
+                                                                r={3}
+                                                                fill="#a855f7"
+                                                                stroke="#fff"
+                                                                strokeWidth={1}
+                                                            />
+                                                            <text
+                                                                x={xScale(minGammaPrice)}
+                                                                y={getGammaY(minGammaVal) + 12}
+                                                                fill="#a855f7"
+                                                                fontSize={9}
+                                                                textAnchor="middle"
+                                                                fontWeight="bold"
+                                                            >
+                                                                Min Γ
+                                                            </text>
+                                                        </g>
+                                                    )}
+                                                </>
                                             )}
                                         </g>
                                     );

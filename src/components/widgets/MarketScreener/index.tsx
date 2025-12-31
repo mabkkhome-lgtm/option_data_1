@@ -5,6 +5,8 @@ import {
     RefreshCw,
     Download,
     ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
     Calendar,
     ChevronDown,
     ChevronUp,
@@ -878,47 +880,79 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                             >
                                 <span className="flex items-center gap-1">
                                     Expiry
-                                    <ArrowUpDown size={10} className="opacity-50 group-hover:opacity-100" />
+                                    {sortField === 'expiry'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
                                 </span>
                             </th>
                             <th
-                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('strike')}
                             >
-                                Strike
+                                <span className="flex items-center justify-end gap-1">
+                                    Strike
+                                    {sortField === 'strike'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                             <th className="p-1.5 text-left">Side</th>
                             <th
-                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('size')}
                             >
-                                Size
+                                <span className="flex items-center justify-end gap-1">
+                                    Size
+                                    {sortField === 'size'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                             <th
-                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('priceUSD')}
                             >
-                                Premium
+                                <span className="flex items-center justify-end gap-1">
+                                    Premium
+                                    {sortField === 'priceUSD'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                             <th
-                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('iv')}
                             >
-                                IV
+                                <span className="flex items-center justify-end gap-1">
+                                    IV
+                                    {sortField === 'iv'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                             <th
-                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-right cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('openInterest')}
                                 title="Open Interest"
                             >
-                                OI
+                                <span className="flex items-center justify-end gap-1">
+                                    OI
+                                    {sortField === 'openInterest'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                             <th className="p-1.5 text-left">Strategy</th>
                             <th
-                                className="p-1.5 text-left cursor-pointer hover:text-accent-primary"
+                                className="p-1.5 text-left cursor-pointer hover:text-accent-primary group"
                                 onClick={() => handleSort('timestamp')}
                             >
-                                Time
+                                <span className="flex items-center gap-1">
+                                    Time
+                                    {sortField === 'timestamp'
+                                        ? (sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                                        : <ArrowUpDown size={10} className="opacity-30 group-hover:opacity-100" />}
+                                </span>
                             </th>
                         </tr>
                     </thead>
