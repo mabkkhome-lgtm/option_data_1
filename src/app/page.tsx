@@ -1,8 +1,30 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { DashboardCanvas } from '@/components/dashboard';
 
 export default function Home() {
+  // Automated Background Process: Calculate Market Levels every 5 minutes
+  // Triggers /api/cron/market-levels
+  useEffect(() => {
+    const runCalculation = async () => {
+      try {
+        console.log("Triggering Market Levels Calculation...");
+        await fetch('/api/cron/market-levels');
+      } catch (e) {
+        console.error("Auto-calc failed", e);
+      }
+    };
+
+    // Run immediately on load
+    runCalculation();
+
+    // Run every 5 minutes (300,000 ms)
+    const interval = setInterval(runCalculation, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-background">
       {/* Top Navigation Bar */}
