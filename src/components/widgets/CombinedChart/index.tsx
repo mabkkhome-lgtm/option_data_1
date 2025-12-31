@@ -665,15 +665,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                                                 textAnchor="middle"
                                                                 fontWeight="bold"
                                                             >
-                                                                Max Γ
-                                                            </text>
-                                                            <text
-                                                                x={xScale(maxGammaPrice)}
-                                                                y={getGammaY(maxGammaVal) - 18}
-                                                                fill="#a855f7"
-                                                                fontSize={9}
-                                                                textAnchor="middle"
-                                                            >
                                                                 ${maxGammaPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                             </text>
                                                         </g>
@@ -697,15 +688,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                                                 textAnchor="middle"
                                                                 fontWeight="bold"
                                                             >
-                                                                Min Γ
-                                                            </text>
-                                                            <text
-                                                                x={xScale(minGammaPrice)}
-                                                                y={getGammaY(minGammaVal) + 24}
-                                                                fill="#a855f7"
-                                                                fontSize={9}
-                                                                textAnchor="middle"
-                                                            >
                                                                 ${minGammaPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                             </text>
                                                         </g>
@@ -717,44 +699,59 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 })}
 
                                 {/* Intersection Markers (Only if 2+ sources) */}
-                                {perSourceData.length >= 2 && visibleCurves.gamma && (() => {
+                                {perSourceData.length >= 2 && (() => {
                                     const s1 = perSourceData[0];
                                     const s2 = perSourceData[1];
-                                    const intersections = [];
+                                    const allIntersections: { x: number, y: number, color: string, type: string }[] = [];
 
-                                    for (let i = 0; i < s1.gamma.length - 1; i++) {
-                                        const v1 = s1.gamma[i].value;
-                                        const v2 = s2.gamma[i].value;
-                                        const diff = v1 - v2;
+                                    // Helper to find intersections for a given data key
+                                    const findCrossings = (
+                                        arr1: DataPoint[],
+                                        arr2: DataPoint[],
+                                        color: string,
+                                        type: string,
+                                        getY: (v: number) => number
+                                    ) => {
+                                        for (let i = 0; i < arr1.length - 1; i++) {
+                                            const v1 = arr1[i].value;
+                                            const v2 = arr2[i].value;
+                                            const diff = v1 - v2;
 
-                                        const v1_next = s1.gamma[i + 1].value;
-                                        const v2_next = s2.gamma[i + 1].value;
-                                        const diff_next = v1_next - v2_next;
+                                            const v1_next = arr1[i + 1].value;
+                                            const v2_next = arr2[i + 1].value;
+                                            const diff_next = v1_next - v2_next;
 
-                                        if (Math.sign(diff) !== Math.sign(diff_next)) {
-                                            const fraction = Math.abs(diff) / (Math.abs(diff) + Math.abs(diff_next));
-                                            const crossPrice = s1.gamma[i].price + (s1.gamma[i + 1].price - s1.gamma[i].price) * fraction;
-                                            const crossVal = v1 + (v1_next - v1) * fraction;
-                                            intersections.push({ x: crossPrice, y: crossVal });
+                                            if (Math.sign(diff) !== Math.sign(diff_next)) {
+                                                const fraction = Math.abs(diff) / (Math.abs(diff) + Math.abs(diff_next));
+                                                const crossPrice = arr1[i].price + (arr1[i + 1].price - arr1[i].price) * fraction;
+                                                const crossVal = v1 + (v1_next - v1) * fraction;
+                                                allIntersections.push({ x: crossPrice, y: getY(crossVal), color, type });
+                                            }
                                         }
-                                    }
+                                    };
 
-                                    return intersections.map((pt, i) => (
-                                        <g key={`cross-${i}`}>
+                                    // Check all visible types
+                                    if (visibleCurves.payoffExpiry) findCrossings(s1.payoffExpiry, s2.payoffExpiry, '#ffffff', 'Payoff', yScale);
+                                    if (visibleCurves.delta) findCrossings(s1.delta, s2.delta, '#22c55e', 'Delta', getDeltaY);
+                                    if (visibleCurves.gamma) findCrossings(s1.gamma, s2.gamma, '#a855f7', 'Gamma', getGammaY);
+
+                                    return allIntersections.map((pt, i) => (
+                                        <g key={`cross-${i}-${pt.type}`}>
                                             <circle
                                                 cx={xScale(pt.x)}
-                                                cy={getGammaY(pt.y)}
+                                                cy={pt.y}
                                                 r={3}
-                                                fill="white"
-                                                stroke="#a855f7"
-                                                strokeWidth={1.5}
+                                                fill={pt.color}
+                                                stroke="#fff"
+                                                strokeWidth={1}
                                             />
                                             <text
                                                 x={xScale(pt.x)}
-                                                y={getGammaY(pt.y) - 8}
-                                                fill="white"
+                                                y={pt.y - 8}
+                                                fill={pt.color}
                                                 fontSize={9}
                                                 textAnchor="middle"
+                                                fontWeight="bold"
                                             >
                                                 ${pt.x.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </text>
