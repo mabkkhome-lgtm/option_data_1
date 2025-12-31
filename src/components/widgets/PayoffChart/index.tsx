@@ -1,29 +1,27 @@
 'use client';
 
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Zap, TrendingUp, TrendingDown, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react';
 import { useTradesSelectionStore, TradeSource } from '@/stores/tradesSelection';
 import { useLivePriceStore } from '@/stores/livePrice';
 import { calculateOptionPrice, generatePriceRange } from '@/lib/options/blackScholes';
 
-// Visx imports for smooth SVG charting (like Thales)
 import { scaleLinear } from '@visx/scale';
 import { LinePath, AreaClosed } from '@visx/shape';
 import { AxisLeft, AxisBottom } from '@visx/axis';
 import { GridRows, GridColumns } from '@visx/grid';
 import { Group } from '@visx/group';
 import { localPoint } from '@visx/event';
-import { Zoom } from '@visx/zoom';
-import { RectClipPath } from '@visx/clip-path';
 import { curveMonotoneX } from '@visx/curve';
 import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
 import { bisector } from 'd3-array';
+
+type DragMode = 'none' | 'pan' | 'xAxis' | 'yAxis';
 
 interface PayoffChartProps {
     widgetId: string;
 }
 
-// Tooltip styles matching dark theme
 const tooltipStyles = {
     ...defaultStyles,
     background: 'rgba(13, 17, 23, 0.95)',
@@ -55,6 +53,20 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         values: { label: string; value: number; color: string }[];
     }>();
 
+    // View options
+    const [daysToExpiry, setDaysToExpiry] = useState(30);
+    const [showExpiry, setShowExpiry] = useState(true);
+    const [showNow, setShowNow] = useState(true);
+
+    // Thales-style zoom/pan state
+    const [zoomX, setZoomX] = useState(1);
+    const [zoomY, setZoomY] = useState(1);
+    const [panX, setPanX] = useState(0);
+    const [panY, setPanY] = useState(0);
+    const [dragMode, setDragMode] = useState<DragMode>('none');
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
+    const [cursor, setCursor] = useState('grab');
+
     // Get connected sources
     const connectedSources = useMemo(() => {
         const connectedIds = connections
@@ -78,10 +90,6 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             .filter((s): s is TradeSource => s !== undefined && s.trades.length > 0);
     }, [sourcesMap, connections, allTrades, widgetId]);
 
-    const [daysToExpiry, setDaysToExpiry] = useState(30);
-    const [showExpiry, setShowExpiry] = useState(true);
-    const [showNow, setShowNow] = useState(true);
-
     // Auto-detect DTE
     useEffect(() => {
         if (connectedSources.length > 0 && connectedSources[0].trades.length > 0) {
@@ -95,11 +103,10 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         }
     }, [connectedSources]);
 
-    // Responsive sizing - improved resize detection
+    // Responsive sizing
     useEffect(() => {
         if (!containerRef.current) return;
 
-        // Function to update dimensions
         const updateDimensions = () => {
             if (!containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
@@ -108,21 +115,15 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             }
         };
 
-        // Set initial dimensions
         updateDimensions();
 
-        // Use ResizeObserver with requestAnimationFrame for smooth updates
         let rafId: number | null = null;
         const resizeObserver = new ResizeObserver(() => {
-            // Cancel any pending animation frame
             if (rafId) cancelAnimationFrame(rafId);
-            // Schedule update on next frame for smooth rendering
             rafId = requestAnimationFrame(updateDimensions);
         });
 
         resizeObserver.observe(containerRef.current);
-
-        // Also listen to window resize as backup
         window.addEventListener('resize', updateDimensions);
 
         return () => {
@@ -201,54 +202,134 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     const totalPnL = chartData?.sourcesData.reduce((sum, d) => sum + d.pnlAtSpot, 0) || 0;
     const isProfitable = totalPnL >= 0;
 
-    // Initial transform for zoom
-    const initialTransform = {
-        scaleX: 1,
-        scaleY: 1,
-        translateX: 0,
-        translateY: 0,
-        skewX: 0,
-        skewY: 0,
-    };
+    // Base bounds
+    const baseBounds = useMemo(() => {
+        if (!chartData) return { minX: 80000, maxX: 110000, minY: -10000, maxY: 10000 };
+        return {
+            minX: chartData.minPrice,
+            maxX: chartData.maxPrice,
+            minY: chartData.minPnL,
+            maxY: chartData.maxPnL,
+        };
+    }, [chartData]);
+
+    // Apply zoom and pan
+    const visibleBounds = useMemo(() => {
+        const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
+        const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
+        const xCenter = (baseBounds.minX + baseBounds.maxX) / 2 + panX;
+        const yCenter = (baseBounds.minY + baseBounds.maxY) / 2 + panY;
+
+        return {
+            minX: xCenter - xRange / 2,
+            maxX: xCenter + xRange / 2,
+            minY: yCenter - yRange / 2,
+            maxY: yCenter + yRange / 2,
+        };
+    }, [baseBounds, zoomX, zoomY, panX, panY]);
+
+    // Scales
+    const xScale = useMemo(() => scaleLinear({
+        domain: [visibleBounds.minX, visibleBounds.maxX],
+        range: [0, innerWidth],
+    }), [visibleBounds, innerWidth]);
+
+    const yScale = useMemo(() => scaleLinear({
+        domain: [visibleBounds.minY, visibleBounds.maxY],
+        range: [innerHeight, 0],
+    }), [visibleBounds, innerHeight]);
 
     // Bisector for tooltip
     const bisectPrice = bisector<{ price: number; pnl: number }, number>(d => d.price).left;
 
-    // Handle tooltip and crosshair - scales are already zoomed so just use them directly
-    const handleTooltip = useCallback(
-        (event: React.MouseEvent | React.TouchEvent, xScale: any, yScale: any) => {
-            if (!chartData) return;
+    // Determine mouse zone
+    const getMouseZone = useCallback((mouseX: number, mouseY: number): DragMode => {
+        if (mouseY > innerHeight && mouseY < innerHeight + margin.bottom && mouseX >= 0 && mouseX <= innerWidth) {
+            return 'xAxis';
+        }
+        if (mouseX < 0 && mouseX > -margin.left && mouseY >= 0 && mouseY <= innerHeight) {
+            return 'yAxis';
+        }
+        if (mouseX >= 0 && mouseX <= innerWidth && mouseY >= 0 && mouseY <= innerHeight) {
+            return 'pan';
+        }
+        return 'none';
+    }, [innerWidth, innerHeight, margin]);
 
-            const point = localPoint(event);
-            if (!point) return;
+    // Handle mouse down
+    const handleMouseDown = useCallback((event: React.MouseEvent) => {
+        const point = localPoint(event);
+        if (!point) return;
 
-            // Get mouse position relative to chart area
+        const mouseX = point.x - margin.left;
+        const mouseY = point.y - margin.top;
+        const mode = getMouseZone(mouseX, mouseY);
+
+        if (mode !== 'none') {
+            setDragMode(mode);
+            setDragStart({ x: event.clientX, y: event.clientY, zoomX, zoomY, panX, panY });
+        }
+    }, [margin, getMouseZone, zoomX, zoomY, panX, panY]);
+
+    // Handle mouse move
+    const handleMouseMove = useCallback((event: React.MouseEvent) => {
+        const point = localPoint(event);
+        if (point) {
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
+            const zone = dragMode !== 'none' ? dragMode : getMouseZone(mouseX, mouseY);
 
-            // Scales are already zoomed, so directly convert to data values
+            if (zone === 'xAxis') setCursor('ew-resize');
+            else if (zone === 'yAxis') setCursor('ns-resize');
+            else if (zone === 'pan') setCursor(dragMode === 'pan' ? 'grabbing' : 'grab');
+            else setCursor('default');
+        }
+
+        const dx = event.clientX - dragStart.x;
+        const dy = event.clientY - dragStart.y;
+
+        if (dragMode === 'xAxis') {
+            const zoomChange = 1 + dx / 200;
+            setZoomX(Math.max(0.1, Math.min(10, dragStart.zoomX * zoomChange)));
+        } else if (dragMode === 'yAxis') {
+            const zoomChange = 1 - dy / 200;
+            setZoomY(Math.max(0.1, Math.min(10, dragStart.zoomY * zoomChange)));
+        } else if (dragMode === 'pan') {
+            const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
+            const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
+            setPanX(dragStart.panX - (dx / innerWidth) * xRange);
+            setPanY(dragStart.panY + (dy / innerHeight) * yRange);
+        } else if (chartData) {
+            // Show tooltip
+            const pt = localPoint(event);
+            if (!pt) return;
+
+            const mouseX = pt.x - margin.left;
+            const mouseY = pt.y - margin.top;
+
+            if (mouseX < 0 || mouseX > innerWidth || mouseY < 0 || mouseY > innerHeight) {
+                hideTooltip();
+                setCrosshairPos(null);
+                return;
+            }
+
             const price = xScale.invert(mouseX);
             const pnlValue = yScale.invert(mouseY);
 
-            // Get P&L values at this price point
             const values = chartData.sourcesData.flatMap(data => {
                 const result: { label: string; value: number; color: string }[] = [];
 
                 if (showExpiry) {
-                    const idx = bisectPrice(data.expiryPayoffs, price, 1);
-                    const d0 = data.expiryPayoffs[idx - 1];
-                    const d1 = data.expiryPayoffs[idx];
-                    const d = d1 && price - d0?.price > d1.price - price ? d1 : d0;
+                    const idx = Math.min(bisectPrice(data.expiryPayoffs, price, 1) - 1, data.expiryPayoffs.length - 1);
+                    const d = data.expiryPayoffs[Math.max(0, idx)];
                     if (d) {
                         result.push({ label: `${data.source.label} Expiry`, value: d.pnl, color: data.source.color || '#a855f7' });
                     }
                 }
 
                 if (showNow) {
-                    const idx = bisectPrice(data.currentPayoffs, price, 1);
-                    const d0 = data.currentPayoffs[idx - 1];
-                    const d1 = data.currentPayoffs[idx];
-                    const d = d1 && price - d0?.price > d1.price - price ? d1 : d0;
+                    const idx = Math.min(bisectPrice(data.currentPayoffs, price, 1) - 1, data.currentPayoffs.length - 1);
+                    const d = data.currentPayoffs[Math.max(0, idx)];
                     if (d) {
                         result.push({ label: `${data.source.label} Now`, value: d.pnl, color: '#22d3ee' });
                     }
@@ -257,26 +338,42 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 return result;
             });
 
-            // Get the primary P&L value (from first source's expiry if available)
             const primaryPnL = values.length > 0 ? values[0].value : pnlValue;
 
-            // Update crosshair position
-            setCrosshairPos({
-                x: Math.max(0, Math.min(innerWidth, mouseX)),
-                y: Math.max(0, Math.min(innerHeight, mouseY)),
-                price,
-                pnl: primaryPnL,
-            });
+            setCrosshairPos({ x: mouseX, y: mouseY, price, pnl: primaryPnL });
 
             showTooltip({
                 tooltipData: { price, pnl: primaryPnL, values },
-                tooltipLeft: point.x,
-                tooltipTop: point.y,
+                tooltipLeft: pt.x,
+                tooltipTop: pt.y,
             });
-        },
-        [chartData, showExpiry, showNow, showTooltip, margin.left, margin.top, innerWidth, innerHeight, bisectPrice]
-    );
+        }
+    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, chartData, xScale, yScale, margin, bisectPrice, showExpiry, showNow, showTooltip, hideTooltip, getMouseZone]);
 
+    const handleMouseUp = useCallback(() => {
+        setDragMode('none');
+    }, []);
+
+    const handleMouseLeave = useCallback(() => {
+        setDragMode('none');
+        hideTooltip();
+        setCrosshairPos(null);
+    }, [hideTooltip]);
+
+    const handleWheel = useCallback((event: React.WheelEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+    }, []);
+
+    const resetView = useCallback(() => {
+        setZoomX(1);
+        setZoomY(1);
+        setPanX(0);
+        setPanY(0);
+    }, []);
 
     if (!hasData) {
         return (
@@ -317,418 +414,181 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                     <span className="text-gray-500">DTE</span>
                     <input type="number" value={daysToExpiry} onChange={(e) => setDaysToExpiry(Math.max(1, Math.min(365, Number(e.target.value))))} className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-cyan-500/30 text-center" min="1" max="365" />
                 </div>
+
+                <button
+                    onClick={resetView}
+                    className="p-1.5 bg-black/30 hover:bg-black/50 rounded text-gray-400 hover:text-white transition-colors"
+                    title="Reset View"
+                >
+                    <RotateCcw size={14} />
+                </button>
             </div>
 
-            {/* Chart - SVG based for smooth interactions */}
+            {/* Chart */}
             <div
                 ref={containerRef}
                 className="flex-1 min-h-0 nodrag nowheel nopan"
-                style={{
-                    touchAction: 'none',
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}
+                style={{ touchAction: 'none', position: 'relative', overflow: 'hidden' }}
             >
                 {chartData && innerWidth > 0 && innerHeight > 0 && (
-                    <Zoom<SVGSVGElement>
-                        width={dimensions.width}
-                        height={dimensions.height}
-                        scaleXMin={0.5}
-                        scaleXMax={10}
-                        scaleYMin={0.5}
-                        scaleYMax={10}
-                        initialTransformMatrix={initialTransform}
-                    >
-                        {(zoom) => {
-                            // Base scales (unzoomed)
-                            const baseXScale = scaleLinear({
-                                domain: [chartData.minPrice, chartData.maxPrice],
-                                range: [0, innerWidth],
-                            });
+                    <>
+                        <svg
+                            width={dimensions.width}
+                            height={dimensions.height}
+                            style={{ cursor, touchAction: 'none' }}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseLeave}
+                            onWheel={handleWheel}
+                        >
+                            <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
-                            const baseYScale = scaleLinear({
-                                domain: [chartData.minPnL, chartData.maxPnL],
-                                range: [innerHeight, 0],
-                            });
+                            <Group left={margin.left} top={margin.top}>
+                                <defs>
+                                    <clipPath id={`clip-payoff-${widgetId}`}>
+                                        <rect width={innerWidth} height={innerHeight} />
+                                    </clipPath>
+                                    {chartData.sourcesData.map((data, idx) => (
+                                        <linearGradient key={idx} id={`gradient-${widgetId}-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+                                            <stop offset="50%" stopColor="transparent" stopOpacity={0} />
+                                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                                        </linearGradient>
+                                    ))}
+                                </defs>
 
-                            // Derive zoomed domains from transform
-                            const { scaleX, scaleY, translateX, translateY } = zoom.transformMatrix;
+                                {/* Grid */}
+                                <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
+                                <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
-                            const zoomedXDomain = [
-                                baseXScale.invert(-translateX / scaleX),
-                                baseXScale.invert((innerWidth - translateX) / scaleX),
-                            ];
-                            const zoomedYDomain = [
-                                baseYScale.invert((innerHeight - translateY) / scaleY),
-                                baseYScale.invert(-translateY / scaleY),
-                            ];
+                                {/* Zero line (break-even) */}
+                                <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="#58a6ff" strokeWidth={1.5} />
 
-                            // Zoomed scales for axes and tooltip
-                            const xScale = scaleLinear({
-                                domain: zoomedXDomain,
-                                range: [0, innerWidth],
-                            });
+                                {/* Current price line */}
+                                <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="#fbbf24" strokeWidth={2} strokeDasharray="5,5" />
+                                <text x={xScale(livePrice)} y={-5} fill="#fbbf24" fontSize={10} textAnchor="middle">
+                                    ${livePrice.toLocaleString()}
+                                </text>
 
-                            const yScale = scaleLinear({
-                                domain: zoomedYDomain,
-                                range: [innerHeight, 0],
-                            });
-
-                            return (
-                                <svg
-                                    width={dimensions.width}
-                                    height={dimensions.height}
-                                    ref={zoom.containerRef}
-                                    style={{ cursor: zoom.isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
-                                    onMouseDown={zoom.dragStart}
-                                    onMouseMove={(e) => {
-                                        zoom.dragMove(e);
-                                        if (!zoom.isDragging) {
-                                            handleTooltip(e, xScale, yScale);
-                                        }
-                                    }}
-                                    onMouseUp={zoom.dragEnd}
-                                    onMouseLeave={() => {
-                                        zoom.dragEnd();
-                                        hideTooltip();
-                                        setCrosshairPos(null);
-                                    }}
-                                    onTouchStart={zoom.dragStart}
-                                    onTouchMove={zoom.dragMove}
-                                    onTouchEnd={zoom.dragEnd}
-                                    onWheel={(e) => {
-                                        e.stopPropagation();
-                                        const point = localPoint(e);
-                                        if (point) {
-                                            zoom.scale({ scaleX: e.deltaY > 0 ? 0.95 : 1.05, scaleY: e.deltaY > 0 ? 0.95 : 1.05, point });
-                                        }
-                                    }}
-                                >
-                                    <RectClipPath id={`chart-clip-${widgetId}`} width={innerWidth} height={innerHeight} />
-
-                                    {/* Background */}
-                                    <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
-
-                                    <Group left={margin.left} top={margin.top}>
-                                        {/* Chart content uses zoomed scales directly, NO transform */}
-                                        <g>
-                                            {/* Grid */}
-                                            <GridRows
-                                                scale={yScale}
-                                                width={innerWidth}
-                                                stroke="rgba(72, 79, 88, 0.3)"
-                                                strokeDasharray="2,2"
-                                            />
-                                            <GridColumns
-                                                scale={xScale}
-                                                height={innerHeight}
-                                                stroke="rgba(72, 79, 88, 0.3)"
-                                                strokeDasharray="2,2"
-                                            />
-
-                                            {/* Zero line */}
-                                            <line
-                                                x1={0}
-                                                x2={innerWidth}
-                                                y1={yScale(0)}
-                                                y2={yScale(0)}
-                                                stroke="#58a6ff"
-                                                strokeWidth={1}
-                                            />
-
-                                            {/* Current price line */}
-                                            <line
-                                                x1={xScale(livePrice)}
-                                                x2={xScale(livePrice)}
-                                                y1={0}
-                                                y2={innerHeight}
-                                                stroke="#fbbf24"
-                                                strokeWidth={2}
-                                                strokeDasharray="5,5"
-                                            />
-                                            <text
-                                                x={xScale(livePrice)}
-                                                y={-5}
-                                                fill="#fbbf24"
-                                                fontSize={10}
-                                                textAnchor="middle"
-                                            >
-                                                ${livePrice.toLocaleString()}
-                                            </text>
-
-                                            {/* P&L curves */}
-                                            {chartData.sourcesData.map((data, idx) => (
-                                                <g key={data.source.sourceId}>
-                                                    {showExpiry && (
-                                                        <>
-                                                            {/* Fill area for expiry */}
-                                                            <AreaClosed
-                                                                data={data.expiryPayoffs}
-                                                                x={d => xScale(d.price)}
-                                                                y={d => yScale(d.pnl)}
-                                                                yScale={yScale}
-                                                                curve={curveMonotoneX}
-                                                                fill={`url(#gradient-${idx})`}
-                                                                opacity={0.3}
-                                                            />
-                                                            {/* Line for expiry */}
-                                                            <LinePath
-                                                                data={data.expiryPayoffs}
-                                                                x={d => xScale(d.price)}
-                                                                y={d => yScale(d.pnl)}
-                                                                stroke={data.source.color || '#a855f7'}
-                                                                strokeWidth={2}
-                                                                curve={curveMonotoneX}
-                                                            />
-                                                        </>
-                                                    )}
-                                                    {showNow && (
-                                                        <LinePath
-                                                            data={data.currentPayoffs}
-                                                            x={d => xScale(d.price)}
-                                                            y={d => yScale(d.pnl)}
-                                                            stroke="#22d3ee"
-                                                            strokeWidth={2}
-                                                            strokeDasharray="5,5"
-                                                            curve={curveMonotoneX}
-                                                        />
-                                                    )}
-                                                </g>
-                                            ))}
-
-                                            {/* Gradient definitions */}
-                                            <defs>
-                                                {chartData.sourcesData.map((data, idx) => (
-                                                    <linearGradient key={idx} id={`gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
-                                                        <stop offset="50%" stopColor="transparent" stopOpacity={0} />
-                                                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
-                                                    </linearGradient>
-                                                ))}
-                                            </defs>
+                                {/* P&L curves */}
+                                <g clipPath={`url(#clip-payoff-${widgetId})`}>
+                                    {chartData.sourcesData.map((data, idx) => (
+                                        <g key={data.source.sourceId}>
+                                            {showExpiry && (
+                                                <>
+                                                    <AreaClosed
+                                                        data={data.expiryPayoffs}
+                                                        x={d => xScale(d.price)}
+                                                        y={d => yScale(d.pnl)}
+                                                        yScale={yScale}
+                                                        curve={curveMonotoneX}
+                                                        fill={`url(#gradient-${widgetId}-${idx})`}
+                                                        opacity={0.3}
+                                                    />
+                                                    <LinePath
+                                                        data={data.expiryPayoffs}
+                                                        x={d => xScale(d.price)}
+                                                        y={d => yScale(d.pnl)}
+                                                        stroke={data.source.color || '#a855f7'}
+                                                        strokeWidth={2}
+                                                        curve={curveMonotoneX}
+                                                    />
+                                                </>
+                                            )}
+                                            {showNow && (
+                                                <LinePath
+                                                    data={data.currentPayoffs}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.pnl)}
+                                                    stroke="#22d3ee"
+                                                    strokeWidth={2}
+                                                    strokeDasharray="5,5"
+                                                    curve={curveMonotoneX}
+                                                />
+                                            )}
                                         </g>
+                                    ))}
+                                </g>
 
-                                        {/* Axes (outside zoom transform so they stay fixed) */}
-                                        <AxisLeft
-                                            scale={yScale}
-                                            stroke="#484f58"
-                                            tickStroke="#484f58"
-                                            tickLabelProps={() => ({
-                                                fill: '#7d8590',
-                                                fontSize: 10,
-                                                textAnchor: 'end',
-                                                dy: '0.33em',
-                                                dx: -4,
-                                            })}
-                                            tickFormat={(v) => `$${Number(v).toLocaleString()}`}
-                                            numTicks={5}
-                                        />
-                                        <AxisBottom
-                                            scale={xScale}
-                                            top={innerHeight}
-                                            stroke="#484f58"
-                                            tickStroke="#484f58"
-                                            tickLabelProps={() => ({
-                                                fill: '#7d8590',
-                                                fontSize: 10,
-                                                textAnchor: 'middle',
-                                            })}
-                                            tickFormat={(v) => `$${Number(v).toLocaleString()}`}
-                                            numTicks={5}
-                                        />
+                                {/* Crosshair */}
+                                {crosshairPos && dragMode === 'none' && (
+                                    <>
+                                        <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                        <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                        <circle cx={crosshairPos.x} cy={crosshairPos.y} r={4} fill="#58a6ff" stroke="#fff" strokeWidth={1.5} />
+                                    </>
+                                )}
 
-                                        {/* Axis labels */}
-                                        <text
-                                            x={innerWidth / 2}
-                                            y={innerHeight + 40}
-                                            fill="#7d8590"
-                                            fontSize={11}
-                                            textAnchor="middle"
-                                        >
-                                            Underlying Price
-                                        </text>
-                                        <text
-                                            x={-innerHeight / 2}
-                                            y={-50}
-                                            fill="#7d8590"
-                                            fontSize={11}
-                                            textAnchor="middle"
-                                            transform="rotate(-90)"
-                                        >
-                                            P&L ($)
-                                        </text>
+                                {/* Axes */}
+                                <AxisLeft
+                                    scale={yScale}
+                                    stroke="#484f58"
+                                    tickStroke="#484f58"
+                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: '0.33em', dx: -4 })}
+                                    tickFormat={(v) => `$${Number(v).toLocaleString()}`}
+                                    numTicks={5}
+                                />
+                                <AxisBottom
+                                    scale={xScale}
+                                    top={innerHeight}
+                                    stroke="#484f58"
+                                    tickStroke="#484f58"
+                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'middle' })}
+                                    tickFormat={(v) => `$${Number(v).toLocaleString()}`}
+                                    numTicks={5}
+                                />
 
-                                        {/* Crosshair - follows mouse cursor */}
-                                        {crosshairPos && tooltipOpen && (
-                                            <g style={{ pointerEvents: 'none' }}>
-                                                {/* Vertical line */}
-                                                <line
-                                                    x1={crosshairPos.x}
-                                                    x2={crosshairPos.x}
-                                                    y1={0}
-                                                    y2={innerHeight}
-                                                    stroke="#58a6ff"
-                                                    strokeWidth={1}
-                                                    strokeDasharray="4,2"
-                                                    opacity={0.8}
-                                                />
-                                                {/* Horizontal line */}
-                                                <line
-                                                    x1={0}
-                                                    x2={innerWidth}
-                                                    y1={crosshairPos.y}
-                                                    y2={crosshairPos.y}
-                                                    stroke="#58a6ff"
-                                                    strokeWidth={1}
-                                                    strokeDasharray="4,2"
-                                                    opacity={0.8}
-                                                />
-                                                {/* Price label at bottom of vertical line */}
-                                                <g transform={`translate(${crosshairPos.x}, ${innerHeight + 5})`}>
-                                                    <rect
-                                                        x={-35}
-                                                        y={0}
-                                                        width={70}
-                                                        height={18}
-                                                        fill="rgba(88, 166, 255, 0.9)"
-                                                        rx={3}
-                                                    />
-                                                    <text
-                                                        x={0}
-                                                        y={13}
-                                                        fill="#fff"
-                                                        fontSize={10}
-                                                        fontWeight="bold"
-                                                        textAnchor="middle"
-                                                        fontFamily="monospace"
-                                                    >
-                                                        ${crosshairPos.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                                    </text>
-                                                </g>
-                                                {/* P&L label at left of horizontal line */}
-                                                <g transform={`translate(-5, ${crosshairPos.y})`}>
-                                                    <rect
-                                                        x={-55}
-                                                        y={-9}
-                                                        width={55}
-                                                        height={18}
-                                                        fill={crosshairPos.pnl >= 0 ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)'}
-                                                        rx={3}
-                                                    />
-                                                    <text
-                                                        x={-27}
-                                                        y={4}
-                                                        fill="#fff"
-                                                        fontSize={10}
-                                                        fontWeight="bold"
-                                                        textAnchor="middle"
-                                                        fontFamily="monospace"
-                                                    >
-                                                        {crosshairPos.pnl >= 0 ? '+' : ''}${crosshairPos.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                                    </text>
-                                                </g>
-                                                {/* Crosshair circle at intersection */}
-                                                <circle
-                                                    cx={crosshairPos.x}
-                                                    cy={crosshairPos.y}
-                                                    r={4}
-                                                    fill="#58a6ff"
-                                                    stroke="#fff"
-                                                    strokeWidth={1.5}
-                                                />
-                                            </g>
-                                        )}
-                                    </Group>
+                                {/* Axis labels */}
+                                <text x={innerWidth / 2} y={innerHeight + 40} fill="#7d8590" fontSize={11} textAnchor="middle">
+                                    Underlying Price
+                                </text>
+                                <text x={-innerHeight / 2} y={-50} fill="#7d8590" fontSize={11} textAnchor="middle" transform="rotate(-90)">
+                                    P&L ($)
+                                </text>
+                            </Group>
+                        </svg>
+                    </>
+                )}
 
-                                    {/* Zoom controls */}
-                                    <Group top={margin.top + 5} left={dimensions.width - 80}>
-                                        <rect
-                                            x={0}
-                                            y={0}
-                                            width={24}
-                                            height={24}
-                                            rx={4}
-                                            fill="rgba(13, 17, 23, 0.8)"
-                                            stroke="rgba(88, 166, 255, 0.3)"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={() => zoom.scale({ scaleX: 1.2, scaleY: 1.2 })}
-                                        />
-                                        <text x={12} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>+</text>
-
-                                        <rect
-                                            x={28}
-                                            y={0}
-                                            width={24}
-                                            height={24}
-                                            rx={4}
-                                            fill="rgba(13, 17, 23, 0.8)"
-                                            stroke="rgba(88, 166, 255, 0.3)"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={() => zoom.scale({ scaleX: 0.8, scaleY: 0.8 })}
-                                        />
-                                        <text x={40} y={16} fill="#7d8590" fontSize={14} textAnchor="middle" style={{ pointerEvents: 'none' }}>−</text>
-
-                                        <rect
-                                            x={56}
-                                            y={0}
-                                            width={24}
-                                            height={24}
-                                            rx={4}
-                                            fill="rgba(13, 17, 23, 0.8)"
-                                            stroke="rgba(88, 166, 255, 0.3)"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={zoom.reset}
-                                        />
-                                        <text x={68} y={16} fill="#7d8590" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>⟲</text>
-                                    </Group>
-                                </svg>
-                            );
-                        }}
-                    </Zoom>
+                {/* Tooltip */}
+                {tooltipOpen && tooltipData && dragMode === 'none' && (
+                    <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
+                        <div className="font-mono text-xs">
+                            <div className="text-gray-400 mb-1">Price: ${tooltipData.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                            {tooltipData.values.map((v, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <span style={{ color: v.color }}>{v.label}:</span>
+                                    <span className={v.value >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                        {v.value >= 0 ? '+' : ''}${v.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </TooltipWithBounds>
                 )}
             </div>
 
-            {/* Tooltip */}
-            {tooltipOpen && tooltipData && (
-                <TooltipWithBounds
-                    left={tooltipLeft}
-                    top={tooltipTop}
-                    style={tooltipStyles}
-                >
-                    <div className="font-mono text-xs">
-                        <div className="text-gray-400 mb-1">Price: ${tooltipData.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-                        {tooltipData.values.map((v, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                                <span style={{ color: v.color }}>{v.label}:</span>
-                                <span className={v.value >= 0 ? 'text-green-400' : 'text-red-400'}>
-                                    {v.value >= 0 ? '+' : ''}${v.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </TooltipWithBounds>
-            )}
-
             {/* Footer */}
-            <div className="px-3 py-2 border-t border-[rgba(48,54,61,0.5)] bg-[rgba(255,255,255,0.02)]">
-                <div className="flex items-center gap-4 text-xs">
-                    {chartData?.sourcesData.map(data => {
-                        const pnl = data.pnlAtSpot;
-                        const isProfit = pnl >= 0;
-                        return (
-                            <div key={data.source.sourceId} className="flex items-center gap-2">
-                                <span style={{ color: data.source.color }} className="font-medium">{data.source.label}</span>
-                                <span className={`font-mono ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-                                    {isProfit ? '+' : ''}${pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </span>
-                            </div>
-                        );
-                    })}
-                    <div className="ml-auto text-gray-500 text-[10px]">
-                        Scroll to zoom • Drag to pan • Click +/− to zoom
-                    </div>
+            <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] flex items-center gap-4 text-xs">
+                {chartData?.sourcesData.map(data => {
+                    const pnl = data.pnlAtSpot;
+                    const isProfit = pnl >= 0;
+                    return (
+                        <div key={data.source.sourceId} className="flex items-center gap-2">
+                            <span style={{ color: data.source.color }} className="font-medium">{data.source.label}</span>
+                            <span className={`font-mono ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                                {isProfit ? '+' : ''}${pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </span>
+                        </div>
+                    );
+                })}
+                <div className="ml-auto text-gray-500 text-[9px]">
+                    Drag axis to scale • Drag chart to pan • Scroll to zoom
                 </div>
             </div>
         </div>
     );
 }
+
+export default PayoffChartWidget;
