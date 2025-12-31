@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Zap, Activity, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Zap, Activity, RotateCcw, ZoomIn, ZoomOut, MoveHorizontal, MoveVertical } from 'lucide-react';
 import { scaleLinear } from '@visx/scale';
 import { LinePath } from '@visx/shape';
 import { AxisLeft, AxisBottom } from '@visx/axis';
@@ -10,7 +10,6 @@ import { Group } from '@visx/group';
 import { curveMonotoneX } from '@visx/curve';
 import { bisector } from 'd3-array';
 import { localPoint } from '@visx/event';
-import { Zoom } from '@visx/zoom';
 import { useTooltip, TooltipWithBounds, defaultStyles } from '@visx/tooltip';
 
 import { useLivePriceStore } from '@/stores/livePrice';
@@ -24,6 +23,13 @@ interface CombinedChartProps {
 interface DataPoint {
     price: number;
     value: number;
+}
+
+interface ChartDataSet {
+    payoffExpiry: DataPoint[];
+    payoffNow: DataPoint[];
+    delta: DataPoint[];
+    gamma: DataPoint[];
 }
 
 interface TooltipData {
@@ -64,6 +70,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         gamma: true,
     });
     const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number; price: number } | null>(null);
+
+    // Independent zoom for X and Y axes
+    const [zoomX, setZoomX] = useState(1);
+    const [zoomY, setZoomY] = useState(1);
+    const [panX, setPanX] = useState(0);
+    const [panY, setPanY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0, panX: 0, panY: 0 });
 
     // Use correct store properties
     const { btcPrice, isConnected } = useLivePriceStore();
@@ -138,13 +152,13 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
-    // Generate price range
+    // Generate price range - wider for better visualization
     const prices = useMemo(() => {
-        return generatePriceRange(livePrice, 0.20, 100);
+        return generatePriceRange(livePrice, 0.30, 150);
     }, [livePrice]);
 
-    // Calculate ALL data points
-    const chartData = useMemo(() => {
+    // Calculate RAW data points (un-normalized)
+    const rawData = useMemo((): ChartDataSet | null => {
         if (!hasData) return null;
 
         const payoffExpiry: DataPoint[] = [];
@@ -157,118 +171,199 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
         for (const price of prices) {
             let totalPayoffExpiry = 0;
-            let totalPayoffNow = 0;
             let totalDelta = 0;
             let totalGamma = 0;
+            let totalPayoffNow = 0;
 
             for (const trade of trades) {
                 const strike = trade.strike;
                 const type = trade.type as 'call' | 'put';
                 const direction = trade.direction === 'buy' ? 1 : -1;
-                const size = trade.size;
+                const size = trade.size || 1;
                 const premium = trade.priceUSD || 0;
                 const iv = trade.iv ? trade.iv / 100 : 0.5;
 
-                // Payoff at expiry
+                // Payoff at expiry - classic hockey stick
                 const intrinsic = type === 'call'
                     ? Math.max(0, price - strike)
                     : Math.max(0, strike - price);
-                totalPayoffExpiry += (intrinsic * direction - premium) * size;
+                totalPayoffExpiry += (intrinsic - premium) * direction * size;
 
                 // Greeks using library
                 const greeks = calculateGreeks(price, strike, T, r, iv, type);
 
-                // Payoff now (approximated)
-                const bsValue = type === 'call'
-                    ? Math.max(0, greeks.delta * (price - strike) + premium * 0.5)
-                    : Math.max(0, -greeks.delta * (strike - price) + premium * 0.5);
-                totalPayoffNow += (bsValue * direction - premium) * size;
-
-                // Greeks - scaled for visibility
+                // Raw Greeks values
                 totalDelta += greeks.delta * direction * size;
-                totalGamma += greeks.gamma * Math.abs(size);
+                totalGamma += greeks.gamma * size; // Gamma is always positive
+
+                // Payoff now using delta approximation
+                const bsApprox = greeks.delta * (price - strike) * 0.5 + premium;
+                totalPayoffNow += (Math.max(0, bsApprox) - premium) * direction * size;
             }
 
             payoffExpiry.push({ price, value: totalPayoffExpiry });
             payoffNow.push({ price, value: totalPayoffNow });
-            delta.push({ price, value: totalDelta * livePrice * 0.01 }); // Scale delta
-            gamma.push({ price, value: totalGamma * livePrice * livePrice * 0.0001 }); // Scale gamma
+            delta.push({ price, value: totalDelta });
+            gamma.push({ price, value: totalGamma });
         }
 
         return { payoffExpiry, payoffNow, delta, gamma };
-    }, [hasData, trades, prices, daysToExpiry, livePrice]);
+    }, [hasData, trades, prices, daysToExpiry]);
 
-    // Chart bounds
-    const chartBounds = useMemo(() => {
-        if (!chartData) return { minX: 80000, maxX: 110000, minY: -10000, maxY: 10000 };
+    // Normalize each curve to fit in a common visual range
+    const normalizedData = useMemo((): ChartDataSet | null => {
+        if (!rawData) return null;
 
-        const allValues: number[] = [];
-        if (visibleCurves.payoffExpiry) allValues.push(...chartData.payoffExpiry.map(d => d.value));
-        if (visibleCurves.payoffNow) allValues.push(...chartData.payoffNow.map(d => d.value));
-        if (visibleCurves.delta) allValues.push(...chartData.delta.map(d => d.value));
-        if (visibleCurves.gamma) allValues.push(...chartData.gamma.map(d => d.value));
+        const normalize = (data: DataPoint[]): DataPoint[] => {
+            const values = data.map(d => d.value);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || 1;
 
-        if (allValues.length === 0) return { minX: 80000, maxX: 110000, minY: -10000, maxY: 10000 };
+            return data.map(d => ({
+                price: d.price,
+                value: (d.value - min) / range * 2 - 1, // Normalize to -1 to 1
+            }));
+        };
 
-        const minY = Math.min(...allValues);
-        const maxY = Math.max(...allValues);
-        const padding = Math.max(Math.abs(maxY - minY) * 0.15, 100);
+        return {
+            payoffExpiry: normalize(rawData.payoffExpiry),
+            payoffNow: normalize(rawData.payoffNow),
+            delta: normalize(rawData.delta),
+            gamma: normalize(rawData.gamma),
+        };
+    }, [rawData]);
 
+    // Base chart bounds
+    const baseBounds = useMemo(() => {
         return {
             minX: prices[0],
             maxX: prices[prices.length - 1],
-            minY: minY - padding,
-            maxY: maxY + padding
+            minY: -1.2,
+            maxY: 1.2,
         };
-    }, [chartData, prices, visibleCurves]);
+    }, [prices]);
 
-    // Initial zoom transform
-    const initialTransform = {
-        scaleX: 1,
-        scaleY: 1,
-        translateX: 0,
-        translateY: 0,
-        skewX: 0,
-        skewY: 0,
-    };
+    // Apply zoom and pan to get visible bounds
+    const visibleBounds = useMemo(() => {
+        const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
+        const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
+        const xCenter = (baseBounds.minX + baseBounds.maxX) / 2 + panX;
+        const yCenter = (baseBounds.minY + baseBounds.maxY) / 2 + panY;
+
+        return {
+            minX: xCenter - xRange / 2,
+            maxX: xCenter + xRange / 2,
+            minY: yCenter - yRange / 2,
+            maxY: yCenter + yRange / 2,
+        };
+    }, [baseBounds, zoomX, zoomY, panX, panY]);
+
+    // Scales
+    const xScale = useMemo(() => scaleLinear({
+        domain: [visibleBounds.minX, visibleBounds.maxX],
+        range: [0, innerWidth],
+    }), [visibleBounds, innerWidth]);
+
+    const yScale = useMemo(() => scaleLinear({
+        domain: [visibleBounds.minY, visibleBounds.maxY],
+        range: [innerHeight, 0],
+    }), [visibleBounds, innerHeight]);
 
     // Bisector for tooltip
     const bisectPrice = bisector<DataPoint, number>(d => d.price).left;
 
-    // Handle tooltip
-    const handleTooltip = useCallback(
-        (event: React.MouseEvent, xScale: any, yScale: any) => {
-            if (!chartData) return;
+    // Handle mouse wheel for zoom
+    const handleWheel = useCallback((event: React.WheelEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
 
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+
+        if (event.shiftKey) {
+            // Shift + scroll = Y axis only
+            setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        } else if (event.ctrlKey || event.metaKey) {
+            // Ctrl/Cmd + scroll = both axes
+            setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+            setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        } else {
+            // Normal scroll = X axis only
+            setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        }
+    }, []);
+
+    // Handle mouse drag for pan
+    const handleMouseDown = useCallback((event: React.MouseEvent) => {
+        setIsDragging(true);
+        setDragStart({ x: event.clientX, y: event.clientY, panX, panY });
+    }, [panX, panY]);
+
+    const handleMouseMove = useCallback((event: React.MouseEvent) => {
+        if (isDragging) {
+            const dx = event.clientX - dragStart.x;
+            const dy = event.clientY - dragStart.y;
+
+            // Convert pixel movement to data units
+            const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
+            const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
+
+            setPanX(dragStart.panX - (dx / innerWidth) * xRange);
+            setPanY(dragStart.panY + (dy / innerHeight) * yRange);
+        } else if (rawData) {
+            // Show tooltip
             const point = localPoint(event);
             if (!point) return;
 
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
+
+            if (mouseX < 0 || mouseX > innerWidth || mouseY < 0 || mouseY > innerHeight) {
+                hideTooltip();
+                setCrosshairPos(null);
+                return;
+            }
+
             const price = xScale.invert(mouseX);
 
-            const idx = Math.min(bisectPrice(chartData.payoffExpiry, price, 1), chartData.payoffExpiry.length - 1);
+            const idx = Math.min(
+                Math.max(0, bisectPrice(rawData.payoffExpiry, price, 1) - 1),
+                rawData.payoffExpiry.length - 1
+            );
 
-            setCrosshairPos({
-                x: Math.max(0, Math.min(innerWidth, mouseX)),
-                y: Math.max(0, Math.min(innerHeight, mouseY)),
-                price,
-            });
+            setCrosshairPos({ x: mouseX, y: mouseY, price });
 
             showTooltip({
                 tooltipData: {
                     price,
-                    payoffExpiry: chartData.payoffExpiry[idx]?.value || 0,
-                    payoffNow: chartData.payoffNow[idx]?.value || 0,
-                    delta: chartData.delta[idx]?.value || 0,
-                    gamma: chartData.gamma[idx]?.value || 0,
+                    payoffExpiry: rawData.payoffExpiry[idx]?.value || 0,
+                    payoffNow: rawData.payoffNow[idx]?.value || 0,
+                    delta: rawData.delta[idx]?.value || 0,
+                    gamma: rawData.gamma[idx]?.value || 0,
                 },
                 tooltipLeft: point.x,
                 tooltipTop: point.y,
             });
-        },
-        [chartData, margin, innerWidth, innerHeight, showTooltip, bisectPrice]
-    );
+        }
+    }, [isDragging, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip]);
+
+    const handleMouseUp = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
+    const handleMouseLeave = useCallback(() => {
+        setIsDragging(false);
+        hideTooltip();
+        setCrosshairPos(null);
+    }, [hideTooltip]);
+
+    // Reset zoom/pan
+    const resetView = useCallback(() => {
+        setZoomX(1);
+        setZoomY(1);
+        setPanX(0);
+        setPanY(0);
+    }, []);
 
     const toggleCurve = (curve: keyof typeof visibleCurves) => {
         setVisibleCurves(prev => ({ ...prev, [curve]: !prev[curve] }));
@@ -288,7 +383,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         <div className="h-full flex flex-col bg-transparent">
             {/* Header with curve toggles */}
             <div className="px-3 py-2 border-b border-[rgba(48,54,61,0.5)] flex items-center gap-2 bg-[rgba(255,255,255,0.02)]">
-                {/* Curve toggles - styled like Thales */}
+                {/* Curve toggles */}
                 <div className="flex flex-col gap-0.5">
                     {Object.entries(curveColors).map(([key, color]) => (
                         <button
@@ -304,6 +399,11 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 </div>
 
                 <div className="flex-1" />
+
+                {/* Zoom hint */}
+                <div className="text-[9px] text-gray-500 hidden md:block">
+                    Scroll: X | Shift+Scroll: Y
+                </div>
 
                 {/* Live price */}
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
@@ -326,171 +426,174 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 </div>
             </div>
 
-            {/* Chart with Zoom/Pan */}
+            {/* Chart */}
             <div
                 ref={containerRef}
                 className="flex-1 min-h-0 nodrag nowheel nopan"
                 style={{ touchAction: 'none', position: 'relative', overflow: 'hidden' }}
             >
-                {innerWidth > 0 && innerHeight > 0 && chartData && (
-                    <Zoom<SVGSVGElement>
-                        width={dimensions.width}
-                        height={dimensions.height}
-                        scaleXMin={0.5}
-                        scaleXMax={5}
-                        scaleYMin={0.5}
-                        scaleYMax={5}
-                        initialTransformMatrix={initialTransform}
-                    >
-                        {(zoom) => {
-                            // Base scales
-                            const baseXScale = scaleLinear({
-                                domain: [chartBounds.minX, chartBounds.maxX],
-                                range: [0, innerWidth],
-                            });
-                            const baseYScale = scaleLinear({
-                                domain: [chartBounds.minY, chartBounds.maxY],
-                                range: [innerHeight, 0],
-                            });
+                {innerWidth > 0 && innerHeight > 0 && normalizedData && (
+                    <>
+                        <svg
+                            width={dimensions.width}
+                            height={dimensions.height}
+                            style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseLeave}
+                            onWheel={handleWheel}
+                        >
+                            <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
-                            // Zoomed scales
-                            const { scaleX, scaleY, translateX, translateY } = zoom.transformMatrix;
-                            const zoomedXDomain = [
-                                baseXScale.invert(-translateX / scaleX),
-                                baseXScale.invert((innerWidth - translateX) / scaleX),
-                            ];
-                            const zoomedYDomain = [
-                                baseYScale.invert((innerHeight - translateY) / scaleY),
-                                baseYScale.invert(-translateY / scaleY),
-                            ];
+                            <Group left={margin.left} top={margin.top}>
+                                {/* Clip path for chart area */}
+                                <defs>
+                                    <clipPath id={`clip-${widgetId}`}>
+                                        <rect width={innerWidth} height={innerHeight} />
+                                    </clipPath>
+                                </defs>
 
-                            const xScale = scaleLinear({ domain: zoomedXDomain, range: [0, innerWidth] });
-                            const yScale = scaleLinear({ domain: zoomedYDomain, range: [innerHeight, 0] });
+                                {/* Grid */}
+                                <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
+                                <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
-                            return (
-                                <>
-                                    <svg
-                                        width={dimensions.width}
-                                        height={dimensions.height}
-                                        ref={zoom.containerRef}
-                                        style={{ cursor: zoom.isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
-                                        onMouseDown={zoom.dragStart}
-                                        onMouseMove={(e) => {
-                                            zoom.dragMove(e);
-                                            if (!zoom.isDragging) handleTooltip(e, xScale, yScale);
-                                        }}
-                                        onMouseUp={zoom.dragEnd}
-                                        onMouseLeave={() => {
-                                            zoom.dragEnd();
-                                            hideTooltip();
-                                            setCrosshairPos(null);
-                                        }}
-                                        onTouchStart={zoom.dragStart}
-                                        onTouchMove={zoom.dragMove}
-                                        onTouchEnd={zoom.dragEnd}
-                                        onWheel={(e) => {
-                                            e.stopPropagation();
-                                            const point = localPoint(e);
-                                            if (point) {
-                                                zoom.scale({ scaleX: e.deltaY > 0 ? 0.95 : 1.05, scaleY: e.deltaY > 0 ? 0.95 : 1.05, point });
-                                            }
-                                        }}
-                                    >
-                                        <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
+                                {/* Zero line */}
+                                <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="rgba(255,255,255,0.3)" strokeWidth={1} />
 
-                                        <Group left={margin.left} top={margin.top}>
-                                            {/* Grid */}
-                                            <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
-                                            <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
+                                {/* Current price line */}
+                                <line
+                                    x1={xScale(livePrice)}
+                                    x2={xScale(livePrice)}
+                                    y1={0}
+                                    y2={innerHeight}
+                                    stroke="rgba(255,255,255,0.5)"
+                                    strokeWidth={1}
+                                    strokeDasharray="4,4"
+                                />
 
-                                            {/* Zero line */}
-                                            <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="#58a6ff" strokeWidth={1} />
+                                {/* Curves with clipping */}
+                                <g clipPath={`url(#clip-${widgetId})`}>
+                                    {visibleCurves.payoffExpiry && (
+                                        <LinePath
+                                            data={normalizedData.payoffExpiry}
+                                            x={d => xScale(d.price)}
+                                            y={d => yScale(d.value)}
+                                            stroke={curveColors.payoffExpiry}
+                                            strokeWidth={2}
+                                            curve={curveMonotoneX}
+                                        />
+                                    )}
+                                    {visibleCurves.payoffNow && (
+                                        <LinePath
+                                            data={normalizedData.payoffNow}
+                                            x={d => xScale(d.price)}
+                                            y={d => yScale(d.value)}
+                                            stroke={curveColors.payoffNow}
+                                            strokeWidth={2}
+                                            curve={curveMonotoneX}
+                                        />
+                                    )}
+                                    {visibleCurves.delta && (
+                                        <LinePath
+                                            data={normalizedData.delta}
+                                            x={d => xScale(d.price)}
+                                            y={d => yScale(d.value)}
+                                            stroke={curveColors.delta}
+                                            strokeWidth={2}
+                                            curve={curveMonotoneX}
+                                        />
+                                    )}
+                                    {visibleCurves.gamma && (
+                                        <LinePath
+                                            data={normalizedData.gamma}
+                                            x={d => xScale(d.price)}
+                                            y={d => yScale(d.value)}
+                                            stroke={curveColors.gamma}
+                                            strokeWidth={2}
+                                            curve={curveMonotoneX}
+                                        />
+                                    )}
+                                </g>
 
-                                            {/* Current price line */}
-                                            <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="#fbbf24" strokeWidth={2} strokeDasharray="4,4" />
+                                {/* Crosshair */}
+                                {crosshairPos && !isDragging && (
+                                    <>
+                                        <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                        <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                    </>
+                                )}
 
-                                            {/* Curves */}
-                                            {visibleCurves.payoffExpiry && (
-                                                <LinePath data={chartData.payoffExpiry} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffExpiry} strokeWidth={2} curve={curveMonotoneX} />
-                                            )}
-                                            {visibleCurves.payoffNow && (
-                                                <LinePath data={chartData.payoffNow} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffNow} strokeWidth={2} curve={curveMonotoneX} />
-                                            )}
-                                            {visibleCurves.delta && (
-                                                <LinePath data={chartData.delta} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.delta} strokeWidth={2} curve={curveMonotoneX} />
-                                            )}
-                                            {visibleCurves.gamma && (
-                                                <LinePath data={chartData.gamma} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.gamma} strokeWidth={2} curve={curveMonotoneX} />
-                                            )}
+                                {/* Y Axis */}
+                                <AxisLeft
+                                    scale={yScale}
+                                    tickFormat={() => ''} // No Y labels for normalized view
+                                    stroke="rgba(125, 133, 144, 0.3)"
+                                    tickStroke="rgba(125, 133, 144, 0.3)"
+                                    numTicks={6}
+                                />
 
-                                            {/* Crosshair */}
-                                            {crosshairPos && (
-                                                <>
-                                                    <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
-                                                    <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
-                                                </>
-                                            )}
+                                {/* X Axis */}
+                                <AxisBottom
+                                    scale={xScale}
+                                    top={innerHeight}
+                                    tickFormat={v => `${(Number(v) / 1000).toFixed(0)},000`}
+                                    stroke="rgba(125, 133, 144, 0.3)"
+                                    tickStroke="rgba(125, 133, 144, 0.3)"
+                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'middle', dy: -4 })}
+                                    numTicks={6}
+                                />
+                            </Group>
+                        </svg>
 
-                                            {/* Y Axis */}
-                                            <AxisLeft
-                                                scale={yScale}
-                                                tickFormat={v => {
-                                                    const val = Number(v);
-                                                    if (Math.abs(val) >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-                                                    if (Math.abs(val) >= 1000) return `${(val / 1000).toFixed(0)}K`;
-                                                    return val.toFixed(0);
-                                                }}
-                                                stroke="rgba(125, 133, 144, 0.3)"
-                                                tickStroke="rgba(125, 133, 144, 0.3)"
-                                                tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: 4 })}
-                                                numTicks={6}
-                                            />
+                        {/* Zoom controls */}
+                        <div className="absolute bottom-2 right-2 flex gap-1">
+                            <button
+                                onClick={() => setZoomX(prev => Math.min(10, prev * 1.2))}
+                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
+                                title="Zoom X In"
+                            >
+                                <MoveHorizontal size={14} />
+                            </button>
+                            <button
+                                onClick={() => setZoomY(prev => Math.min(10, prev * 1.2))}
+                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
+                                title="Zoom Y In"
+                            >
+                                <MoveVertical size={14} />
+                            </button>
+                            <button
+                                onClick={() => { setZoomX(prev => Math.min(10, prev * 1.2)); setZoomY(prev => Math.min(10, prev * 1.2)); }}
+                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
+                                title="Zoom Both In"
+                            >
+                                <ZoomIn size={14} />
+                            </button>
+                            <button
+                                onClick={() => { setZoomX(prev => Math.max(0.1, prev * 0.8)); setZoomY(prev => Math.max(0.1, prev * 0.8)); }}
+                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
+                                title="Zoom Both Out"
+                            >
+                                <ZoomOut size={14} />
+                            </button>
+                            <button
+                                onClick={resetView}
+                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
+                                title="Reset View"
+                            >
+                                <RotateCcw size={14} />
+                            </button>
+                        </div>
 
-                                            {/* X Axis */}
-                                            <AxisBottom
-                                                scale={xScale}
-                                                top={innerHeight}
-                                                tickFormat={v => `${(Number(v) / 1000).toFixed(0)}K`}
-                                                stroke="rgba(125, 133, 144, 0.3)"
-                                                tickStroke="rgba(125, 133, 144, 0.3)"
-                                                tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'middle', dy: -4 })}
-                                                numTicks={6}
-                                            />
-                                        </Group>
-                                    </svg>
-
-                                    {/* Zoom controls */}
-                                    <div className="absolute bottom-2 right-2 flex gap-1">
-                                        <button
-                                            onClick={() => zoom.scale({ scaleX: 1.2, scaleY: 1.2 })}
-                                            className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                            title="Zoom In"
-                                        >
-                                            <ZoomIn size={14} />
-                                        </button>
-                                        <button
-                                            onClick={() => zoom.scale({ scaleX: 0.8, scaleY: 0.8 })}
-                                            className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                            title="Zoom Out"
-                                        >
-                                            <ZoomOut size={14} />
-                                        </button>
-                                        <button
-                                            onClick={() => zoom.reset()}
-                                            className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                            title="Reset"
-                                        >
-                                            <RotateCcw size={14} />
-                                        </button>
-                                    </div>
-                                </>
-                            );
-                        }}
-                    </Zoom>
+                        {/* Zoom indicators */}
+                        <div className="absolute top-2 right-2 text-[9px] text-gray-500 bg-black/30 px-1.5 py-0.5 rounded">
+                            X:{zoomX.toFixed(1)}x Y:{zoomY.toFixed(1)}x
+                        </div>
+                    </>
                 )}
 
-                {/* Tooltip */}
-                {tooltipOpen && tooltipData && (
+                {/* Tooltip - shows RAW values */}
+                {tooltipOpen && tooltipData && !isDragging && (
                     <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
                         <div className="font-mono space-y-0.5">
                             <div className="text-cyan-400 font-bold">
@@ -508,12 +611,12 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             )}
                             {visibleCurves.delta && (
                                 <div style={{ color: curveColors.delta }}>
-                                    Δ: {tooltipData.delta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    Δ: {tooltipData.delta.toFixed(4)}
                                 </div>
                             )}
                             {visibleCurves.gamma && (
                                 <div style={{ color: curveColors.gamma }}>
-                                    Γ: {tooltipData.gamma.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    Γ: {tooltipData.gamma.toFixed(6)}
                                 </div>
                             )}
                         </div>
