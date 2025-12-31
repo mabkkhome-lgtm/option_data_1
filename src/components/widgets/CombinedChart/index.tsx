@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Zap, Activity, RotateCcw, ZoomIn, ZoomOut, MoveHorizontal, MoveVertical } from 'lucide-react';
+import { Zap, Activity, RotateCcw } from 'lucide-react';
 import { scaleLinear } from '@visx/scale';
 import { LinePath } from '@visx/shape';
 import { AxisLeft, AxisBottom } from '@visx/axis';
@@ -59,6 +59,8 @@ const tooltipStyles = {
     borderRadius: '8px',
 };
 
+type DragMode = 'none' | 'pan' | 'xAxis' | 'yAxis';
+
 export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId }: CombinedChartProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -71,13 +73,15 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     });
     const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number; price: number } | null>(null);
 
-    // Independent zoom for X and Y axes
+    // Zoom/Pan state - Thales style
     const [zoomX, setZoomX] = useState(1);
     const [zoomY, setZoomY] = useState(1);
     const [panX, setPanX] = useState(0);
     const [panY, setPanY] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0, panX: 0, panY: 0 });
+
+    // Drag state
+    const [dragMode, setDragMode] = useState<DragMode>('none');
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
 
     // Use correct store properties
     const { btcPrice, isConnected } = useLivePriceStore();
@@ -152,12 +156,16 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
-    // Generate price range - wider for better visualization
+    // Axis interaction zones
+    const xAxisZone = { top: innerHeight, bottom: innerHeight + margin.bottom };
+    const yAxisZone = { left: -margin.left, right: 0 };
+
+    // Generate price range
     const prices = useMemo(() => {
         return generatePriceRange(livePrice, 0.30, 150);
     }, [livePrice]);
 
-    // Calculate RAW data points (un-normalized)
+    // Calculate RAW data points
     const rawData = useMemo((): ChartDataSet | null => {
         if (!hasData) return null;
 
@@ -183,20 +191,18 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 const premium = trade.priceUSD || 0;
                 const iv = trade.iv ? trade.iv / 100 : 0.5;
 
-                // Payoff at expiry - classic hockey stick
+                // Payoff at expiry
                 const intrinsic = type === 'call'
                     ? Math.max(0, price - strike)
                     : Math.max(0, strike - price);
                 totalPayoffExpiry += (intrinsic - premium) * direction * size;
 
-                // Greeks using library
+                // Greeks
                 const greeks = calculateGreeks(price, strike, T, r, iv, type);
-
-                // Raw Greeks values
                 totalDelta += greeks.delta * direction * size;
-                totalGamma += greeks.gamma * size; // Gamma is always positive
+                totalGamma += greeks.gamma * size;
 
-                // Payoff now using delta approximation
+                // Payoff now
                 const bsApprox = greeks.delta * (price - strike) * 0.5 + premium;
                 totalPayoffNow += (Math.max(0, bsApprox) - premium) * direction * size;
             }
@@ -210,11 +216,10 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         return { payoffExpiry, payoffNow, delta, gamma };
     }, [hasData, trades, prices, daysToExpiry]);
 
-    // Calculate bounds and scaling factors for each curve type
+    // Calculate bounds and scaling
     const curveScales = useMemo(() => {
         if (!rawData) return null;
 
-        // Get payoff bounds (for primary Y axis - this shows the zero line correctly)
         const payoffValues = [
             ...rawData.payoffExpiry.map(d => d.value),
             ...rawData.payoffNow.map(d => d.value)
@@ -223,7 +228,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         const payoffMax = Math.max(...payoffValues);
         const payoffPadding = Math.max(Math.abs(payoffMax - payoffMin) * 0.15, 100);
 
-        // Normalize Greeks to fit within payoff scale
         const deltaValues = rawData.delta.map(d => d.value);
         const deltaMin = Math.min(...deltaValues);
         const deltaMax = Math.max(...deltaValues);
@@ -234,7 +238,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         const gammaMax = Math.max(...gammaValues);
         const gammaRange = gammaMax - gammaMin || 1;
 
-        // Scale factor to fit Greeks into payoff chart area (use ~40% of chart height)
         const payoffRange = (payoffMax - payoffMin) || 1;
         const greekScale = payoffRange * 0.4;
 
@@ -246,31 +249,29 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         };
     }, [rawData]);
 
-    // Scale Greeks to fit within payoff chart area
+    // Scale Greeks to fit
     const scaledData = useMemo(() => {
         if (!rawData || !curveScales) return null;
 
-        // Scale delta to fit in visible area
         const scaledDelta = rawData.delta.map(d => ({
             price: d.price,
             value: (d.value - curveScales.delta.min) * curveScales.delta.scale - curveScales.delta.scale * curveScales.delta.range * 0.5,
         }));
 
-        // Scale gamma to fit in visible area (offset slightly)
         const scaledGamma = rawData.gamma.map(d => ({
             price: d.price,
             value: (d.value - curveScales.gamma.min) * curveScales.gamma.scale - curveScales.gamma.scale * curveScales.gamma.range * 0.5,
         }));
 
         return {
-            payoffExpiry: rawData.payoffExpiry, // Keep payoff in raw values!
-            payoffNow: rawData.payoffNow,       // Keep payoff in raw values!
+            payoffExpiry: rawData.payoffExpiry,
+            payoffNow: rawData.payoffNow,
             delta: scaledDelta,
             gamma: scaledGamma,
         };
     }, [rawData, curveScales]);
 
-    // Base chart bounds - use payoff values so zero line is correct
+    // Base chart bounds
     const baseBounds = useMemo(() => {
         if (!curveScales) {
             return { minX: prices[0], maxX: prices[prices.length - 1], minY: -10000, maxY: 10000 };
@@ -283,7 +284,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         };
     }, [prices, curveScales]);
 
-    // Apply zoom and pan to get visible bounds
+    // Apply zoom and pan
     const visibleBounds = useMemo(() => {
         const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
         const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
@@ -312,38 +313,60 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     // Bisector for tooltip
     const bisectPrice = bisector<DataPoint, number>(d => d.price).left;
 
-    // Handle mouse wheel for zoom
-    const handleWheel = useCallback((event: React.WheelEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
-
-        if (event.shiftKey) {
-            // Shift + scroll = Y axis only
-            setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
-        } else if (event.ctrlKey || event.metaKey) {
-            // Ctrl/Cmd + scroll = both axes
-            setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
-            setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
-        } else {
-            // Normal scroll = X axis only
-            setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+    // Determine if mouse is on axis
+    const getMouseZone = useCallback((mouseX: number, mouseY: number): DragMode => {
+        // Check if on X axis (bottom area)
+        if (mouseY > innerHeight && mouseY < innerHeight + margin.bottom && mouseX >= 0 && mouseX <= innerWidth) {
+            return 'xAxis';
         }
-    }, []);
+        // Check if on Y axis (left area)
+        if (mouseX < 0 && mouseX > -margin.left && mouseY >= 0 && mouseY <= innerHeight) {
+            return 'yAxis';
+        }
+        // Otherwise in chart area
+        if (mouseX >= 0 && mouseX <= innerWidth && mouseY >= 0 && mouseY <= innerHeight) {
+            return 'pan';
+        }
+        return 'none';
+    }, [innerWidth, innerHeight, margin]);
 
-    // Handle mouse drag for pan
+    // Handle mouse down
     const handleMouseDown = useCallback((event: React.MouseEvent) => {
-        setIsDragging(true);
-        setDragStart({ x: event.clientX, y: event.clientY, panX, panY });
-    }, [panX, panY]);
+        const point = localPoint(event);
+        if (!point) return;
 
+        const mouseX = point.x - margin.left;
+        const mouseY = point.y - margin.top;
+        const mode = getMouseZone(mouseX, mouseY);
+
+        if (mode !== 'none') {
+            setDragMode(mode);
+            setDragStart({
+                x: event.clientX,
+                y: event.clientY,
+                zoomX,
+                zoomY,
+                panX,
+                panY,
+            });
+        }
+    }, [margin, getMouseZone, zoomX, zoomY, panX, panY]);
+
+    // Handle mouse move
     const handleMouseMove = useCallback((event: React.MouseEvent) => {
-        if (isDragging) {
-            const dx = event.clientX - dragStart.x;
-            const dy = event.clientY - dragStart.y;
+        const dx = event.clientX - dragStart.x;
+        const dy = event.clientY - dragStart.y;
 
-            // Convert pixel movement to data units
+        if (dragMode === 'xAxis') {
+            // Drag right = expand (more zoom), drag left = compress (less zoom)
+            const zoomChange = 1 + dx / 200;
+            setZoomX(Math.max(0.1, Math.min(10, dragStart.zoomX * zoomChange)));
+        } else if (dragMode === 'yAxis') {
+            // Drag up = expand (more zoom), drag down = compress (less zoom)
+            const zoomChange = 1 - dy / 200;
+            setZoomY(Math.max(0.1, Math.min(10, dragStart.zoomY * zoomChange)));
+        } else if (dragMode === 'pan') {
+            // Pan the chart
             const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
             const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
 
@@ -364,7 +387,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             }
 
             const price = xScale.invert(mouseX);
-
             const idx = Math.min(
                 Math.max(0, bisectPrice(rawData.payoffExpiry, price, 1) - 1),
                 rawData.payoffExpiry.length - 1
@@ -384,19 +406,29 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 tooltipTop: point.y,
             });
         }
-    }, [isDragging, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip]);
+    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip]);
 
     const handleMouseUp = useCallback(() => {
-        setIsDragging(false);
+        setDragMode('none');
     }, []);
 
     const handleMouseLeave = useCallback(() => {
-        setIsDragging(false);
+        setDragMode('none');
         hideTooltip();
         setCrosshairPos(null);
     }, [hideTooltip]);
 
-    // Reset zoom/pan
+    // Mouse wheel for zoom (both axes)
+    const handleWheel = useCallback((event: React.WheelEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+    }, []);
+
+    // Reset view
     const resetView = useCallback(() => {
         setZoomX(1);
         setZoomY(1);
@@ -407,6 +439,32 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const toggleCurve = (curve: keyof typeof visibleCurves) => {
         setVisibleCurves(prev => ({ ...prev, [curve]: !prev[curve] }));
     };
+
+    // Get cursor style based on position
+    const getCursor = useCallback((mouseX: number, mouseY: number): string => {
+        if (dragMode === 'xAxis') return 'ew-resize';
+        if (dragMode === 'yAxis') return 'ns-resize';
+        if (dragMode === 'pan') return 'grabbing';
+
+        const zone = getMouseZone(mouseX, mouseY);
+        if (zone === 'xAxis') return 'ew-resize';
+        if (zone === 'yAxis') return 'ns-resize';
+        if (zone === 'pan') return 'grab';
+        return 'default';
+    }, [dragMode, getMouseZone]);
+
+    const [cursor, setCursor] = useState('grab');
+
+    // Update cursor on mouse move
+    const handleMouseMoveForCursor = useCallback((event: React.MouseEvent) => {
+        const point = localPoint(event);
+        if (point) {
+            const mouseX = point.x - margin.left;
+            const mouseY = point.y - margin.top;
+            setCursor(getCursor(mouseX, mouseY));
+        }
+        handleMouseMove(event);
+    }, [getCursor, margin, handleMouseMove]);
 
     if (!hasData) {
         return (
@@ -439,11 +497,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
                 <div className="flex-1" />
 
-                {/* Zoom hint */}
-                <div className="text-[9px] text-gray-500 hidden md:block">
-                    Scroll: X | Shift+Scroll: Y
-                </div>
-
                 {/* Live price */}
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
                     <Zap size={12} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
@@ -463,6 +516,15 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                         max="365"
                     />
                 </div>
+
+                {/* Reset button */}
+                <button
+                    onClick={resetView}
+                    className="p-1.5 bg-black/30 hover:bg-black/50 rounded text-gray-400 hover:text-white transition-colors"
+                    title="Reset View"
+                >
+                    <RotateCcw size={14} />
+                </button>
             </div>
 
             {/* Chart */}
@@ -476,9 +538,9 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                         <svg
                             width={dimensions.width}
                             height={dimensions.height}
-                            style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+                            style={{ cursor, touchAction: 'none' }}
                             onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMove}
+                            onMouseMove={handleMouseMoveForCursor}
                             onMouseUp={handleMouseUp}
                             onMouseLeave={handleMouseLeave}
                             onWheel={handleWheel}
@@ -486,7 +548,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
                             <Group left={margin.left} top={margin.top}>
-                                {/* Clip path for chart area */}
+                                {/* Clip path */}
                                 <defs>
                                     <clipPath id={`clip-${widgetId}`}>
                                         <rect width={innerWidth} height={innerHeight} />
@@ -497,7 +559,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
                                 <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
-                                {/* Zero line - BREAK-EVEN LINE (Y = 0 in actual P&L) */}
+                                {/* Zero line - BREAK-EVEN */}
                                 <line
                                     x1={0}
                                     x2={innerWidth}
@@ -506,15 +568,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     stroke="#58a6ff"
                                     strokeWidth={1.5}
                                 />
-                                <text
-                                    x={innerWidth - 5}
-                                    y={yScale(0) - 5}
-                                    fill="#58a6ff"
-                                    fontSize={9}
-                                    textAnchor="end"
-                                >
-                                    Break-even
-                                </text>
 
                                 {/* Current price line */}
                                 <line
@@ -522,23 +575,13 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     x2={xScale(livePrice)}
                                     y1={0}
                                     y2={innerHeight}
-                                    stroke="#fbbf24"
-                                    strokeWidth={2}
+                                    stroke="rgba(255,255,255,0.5)"
+                                    strokeWidth={1}
                                     strokeDasharray="4,4"
                                 />
-                                <text
-                                    x={xScale(livePrice)}
-                                    y={-5}
-                                    fill="#fbbf24"
-                                    fontSize={10}
-                                    textAnchor="middle"
-                                >
-                                    ${livePrice.toLocaleString()}
-                                </text>
 
-                                {/* Curves with clipping */}
+                                {/* Curves */}
                                 <g clipPath={`url(#clip-${widgetId})`}>
-                                    {/* Payoff at Expiry - uses raw values */}
                                     {visibleCurves.payoffExpiry && (
                                         <LinePath
                                             data={scaledData.payoffExpiry}
@@ -549,7 +592,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
-                                    {/* Payoff Now - uses raw values */}
                                     {visibleCurves.payoffNow && (
                                         <LinePath
                                             data={scaledData.payoffNow}
@@ -560,7 +602,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
-                                    {/* Delta - scaled to fit */}
                                     {visibleCurves.delta && (
                                         <LinePath
                                             data={scaledData.delta}
@@ -571,7 +612,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
-                                    {/* Gamma - scaled to fit */}
                                     {visibleCurves.gamma && (
                                         <LinePath
                                             data={scaledData.gamma}
@@ -585,14 +625,21 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 </g>
 
                                 {/* Crosshair */}
-                                {crosshairPos && !isDragging && (
+                                {crosshairPos && dragMode === 'none' && (
                                     <>
                                         <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
                                         <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
                                     </>
                                 )}
 
-                                {/* Y Axis - shows P&L values */}
+                                {/* Y Axis - draggable zone */}
+                                <rect
+                                    x={-margin.left}
+                                    y={0}
+                                    width={margin.left}
+                                    height={innerHeight}
+                                    fill="transparent"
+                                />
                                 <AxisLeft
                                     scale={yScale}
                                     tickFormat={v => {
@@ -606,7 +653,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     numTicks={6}
                                 />
 
-                                {/* X Axis */}
+                                {/* X Axis - draggable zone */}
+                                <rect
+                                    x={0}
+                                    y={innerHeight}
+                                    width={innerWidth}
+                                    height={margin.bottom}
+                                    fill="transparent"
+                                />
                                 <AxisBottom
                                     scale={xScale}
                                     top={innerHeight}
@@ -618,55 +672,11 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 />
                             </Group>
                         </svg>
-
-                        {/* Zoom controls */}
-                        <div className="absolute bottom-2 right-2 flex gap-1">
-                            <button
-                                onClick={() => setZoomX(prev => Math.min(10, prev * 1.2))}
-                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                title="Zoom X In"
-                            >
-                                <MoveHorizontal size={14} />
-                            </button>
-                            <button
-                                onClick={() => setZoomY(prev => Math.min(10, prev * 1.2))}
-                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                title="Zoom Y In"
-                            >
-                                <MoveVertical size={14} />
-                            </button>
-                            <button
-                                onClick={() => { setZoomX(prev => Math.min(10, prev * 1.2)); setZoomY(prev => Math.min(10, prev * 1.2)); }}
-                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                title="Zoom Both In"
-                            >
-                                <ZoomIn size={14} />
-                            </button>
-                            <button
-                                onClick={() => { setZoomX(prev => Math.max(0.1, prev * 0.8)); setZoomY(prev => Math.max(0.1, prev * 0.8)); }}
-                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                title="Zoom Both Out"
-                            >
-                                <ZoomOut size={14} />
-                            </button>
-                            <button
-                                onClick={resetView}
-                                className="p-1 bg-black/50 hover:bg-black/70 rounded text-white"
-                                title="Reset View"
-                            >
-                                <RotateCcw size={14} />
-                            </button>
-                        </div>
-
-                        {/* Zoom indicators */}
-                        <div className="absolute top-2 right-2 text-[9px] text-gray-500 bg-black/30 px-1.5 py-0.5 rounded">
-                            X:{zoomX.toFixed(1)}x Y:{zoomY.toFixed(1)}x
-                        </div>
                     </>
                 )}
 
-                {/* Tooltip - shows RAW values */}
-                {tooltipOpen && tooltipData && !isDragging && (
+                {/* Tooltip */}
+                {tooltipOpen && tooltipData && dragMode === 'none' && (
                     <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
                         <div className="font-mono space-y-0.5">
                             <div className="text-cyan-400 font-bold">
@@ -695,6 +705,11 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                         </div>
                     </TooltipWithBounds>
                 )}
+            </div>
+
+            {/* Footer hint */}
+            <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[9px] text-gray-500 text-center">
+                Drag axis to scale • Drag chart to pan • Scroll to zoom
             </div>
         </div>
     );
