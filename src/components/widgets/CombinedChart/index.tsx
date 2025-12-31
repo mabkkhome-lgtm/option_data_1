@@ -210,39 +210,78 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         return { payoffExpiry, payoffNow, delta, gamma };
     }, [hasData, trades, prices, daysToExpiry]);
 
-    // Normalize each curve to fit in a common visual range
-    const normalizedData = useMemo((): ChartDataSet | null => {
+    // Calculate bounds and scaling factors for each curve type
+    const curveScales = useMemo(() => {
         if (!rawData) return null;
 
-        const normalize = (data: DataPoint[]): DataPoint[] => {
-            const values = data.map(d => d.value);
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const range = max - min || 1;
+        // Get payoff bounds (for primary Y axis - this shows the zero line correctly)
+        const payoffValues = [
+            ...rawData.payoffExpiry.map(d => d.value),
+            ...rawData.payoffNow.map(d => d.value)
+        ];
+        const payoffMin = Math.min(...payoffValues);
+        const payoffMax = Math.max(...payoffValues);
+        const payoffPadding = Math.max(Math.abs(payoffMax - payoffMin) * 0.15, 100);
 
-            return data.map(d => ({
-                price: d.price,
-                value: (d.value - min) / range * 2 - 1, // Normalize to -1 to 1
-            }));
-        };
+        // Normalize Greeks to fit within payoff scale
+        const deltaValues = rawData.delta.map(d => d.value);
+        const deltaMin = Math.min(...deltaValues);
+        const deltaMax = Math.max(...deltaValues);
+        const deltaRange = deltaMax - deltaMin || 1;
+
+        const gammaValues = rawData.gamma.map(d => d.value);
+        const gammaMin = Math.min(...gammaValues);
+        const gammaMax = Math.max(...gammaValues);
+        const gammaRange = gammaMax - gammaMin || 1;
+
+        // Scale factor to fit Greeks into payoff chart area (use ~40% of chart height)
+        const payoffRange = (payoffMax - payoffMin) || 1;
+        const greekScale = payoffRange * 0.4;
 
         return {
-            payoffExpiry: normalize(rawData.payoffExpiry),
-            payoffNow: normalize(rawData.payoffNow),
-            delta: normalize(rawData.delta),
-            gamma: normalize(rawData.gamma),
+            minY: payoffMin - payoffPadding,
+            maxY: payoffMax + payoffPadding,
+            delta: { min: deltaMin, range: deltaRange, scale: greekScale / deltaRange },
+            gamma: { min: gammaMin, range: gammaRange, scale: greekScale / gammaRange },
         };
     }, [rawData]);
 
-    // Base chart bounds
+    // Scale Greeks to fit within payoff chart area
+    const scaledData = useMemo(() => {
+        if (!rawData || !curveScales) return null;
+
+        // Scale delta to fit in visible area
+        const scaledDelta = rawData.delta.map(d => ({
+            price: d.price,
+            value: (d.value - curveScales.delta.min) * curveScales.delta.scale - curveScales.delta.scale * curveScales.delta.range * 0.5,
+        }));
+
+        // Scale gamma to fit in visible area (offset slightly)
+        const scaledGamma = rawData.gamma.map(d => ({
+            price: d.price,
+            value: (d.value - curveScales.gamma.min) * curveScales.gamma.scale - curveScales.gamma.scale * curveScales.gamma.range * 0.5,
+        }));
+
+        return {
+            payoffExpiry: rawData.payoffExpiry, // Keep payoff in raw values!
+            payoffNow: rawData.payoffNow,       // Keep payoff in raw values!
+            delta: scaledDelta,
+            gamma: scaledGamma,
+        };
+    }, [rawData, curveScales]);
+
+    // Base chart bounds - use payoff values so zero line is correct
     const baseBounds = useMemo(() => {
+        if (!curveScales) {
+            return { minX: prices[0], maxX: prices[prices.length - 1], minY: -10000, maxY: 10000 };
+        }
         return {
             minX: prices[0],
             maxX: prices[prices.length - 1],
-            minY: -1.2,
-            maxY: 1.2,
+            minY: curveScales.minY,
+            maxY: curveScales.maxY,
         };
-    }, [prices]);
+    }, [prices, curveScales]);
 
     // Apply zoom and pan to get visible bounds
     const visibleBounds = useMemo(() => {
@@ -432,7 +471,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 className="flex-1 min-h-0 nodrag nowheel nopan"
                 style={{ touchAction: 'none', position: 'relative', overflow: 'hidden' }}
             >
-                {innerWidth > 0 && innerHeight > 0 && normalizedData && (
+                {innerWidth > 0 && innerHeight > 0 && scaledData && (
                     <>
                         <svg
                             width={dimensions.width}
@@ -458,8 +497,24 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
                                 <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
-                                {/* Zero line */}
-                                <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="rgba(255,255,255,0.3)" strokeWidth={1} />
+                                {/* Zero line - BREAK-EVEN LINE (Y = 0 in actual P&L) */}
+                                <line
+                                    x1={0}
+                                    x2={innerWidth}
+                                    y1={yScale(0)}
+                                    y2={yScale(0)}
+                                    stroke="#58a6ff"
+                                    strokeWidth={1.5}
+                                />
+                                <text
+                                    x={innerWidth - 5}
+                                    y={yScale(0) - 5}
+                                    fill="#58a6ff"
+                                    fontSize={9}
+                                    textAnchor="end"
+                                >
+                                    Break-even
+                                </text>
 
                                 {/* Current price line */}
                                 <line
@@ -467,16 +522,26 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     x2={xScale(livePrice)}
                                     y1={0}
                                     y2={innerHeight}
-                                    stroke="rgba(255,255,255,0.5)"
-                                    strokeWidth={1}
+                                    stroke="#fbbf24"
+                                    strokeWidth={2}
                                     strokeDasharray="4,4"
                                 />
+                                <text
+                                    x={xScale(livePrice)}
+                                    y={-5}
+                                    fill="#fbbf24"
+                                    fontSize={10}
+                                    textAnchor="middle"
+                                >
+                                    ${livePrice.toLocaleString()}
+                                </text>
 
                                 {/* Curves with clipping */}
                                 <g clipPath={`url(#clip-${widgetId})`}>
+                                    {/* Payoff at Expiry - uses raw values */}
                                     {visibleCurves.payoffExpiry && (
                                         <LinePath
-                                            data={normalizedData.payoffExpiry}
+                                            data={scaledData.payoffExpiry}
                                             x={d => xScale(d.price)}
                                             y={d => yScale(d.value)}
                                             stroke={curveColors.payoffExpiry}
@@ -484,9 +549,10 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
+                                    {/* Payoff Now - uses raw values */}
                                     {visibleCurves.payoffNow && (
                                         <LinePath
-                                            data={normalizedData.payoffNow}
+                                            data={scaledData.payoffNow}
                                             x={d => xScale(d.price)}
                                             y={d => yScale(d.value)}
                                             stroke={curveColors.payoffNow}
@@ -494,9 +560,10 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
+                                    {/* Delta - scaled to fit */}
                                     {visibleCurves.delta && (
                                         <LinePath
-                                            data={normalizedData.delta}
+                                            data={scaledData.delta}
                                             x={d => xScale(d.price)}
                                             y={d => yScale(d.value)}
                                             stroke={curveColors.delta}
@@ -504,9 +571,10 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                             curve={curveMonotoneX}
                                         />
                                     )}
+                                    {/* Gamma - scaled to fit */}
                                     {visibleCurves.gamma && (
                                         <LinePath
-                                            data={normalizedData.gamma}
+                                            data={scaledData.gamma}
                                             x={d => xScale(d.price)}
                                             y={d => yScale(d.value)}
                                             stroke={curveColors.gamma}
@@ -524,12 +592,17 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     </>
                                 )}
 
-                                {/* Y Axis */}
+                                {/* Y Axis - shows P&L values */}
                                 <AxisLeft
                                     scale={yScale}
-                                    tickFormat={() => ''} // No Y labels for normalized view
+                                    tickFormat={v => {
+                                        const val = Number(v);
+                                        if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+                                        return `$${val.toFixed(0)}`;
+                                    }}
                                     stroke="rgba(125, 133, 144, 0.3)"
                                     tickStroke="rgba(125, 133, 144, 0.3)"
+                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: 4 })}
                                     numTicks={6}
                                 />
 
@@ -601,12 +674,12 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             </div>
                             {visibleCurves.payoffExpiry && (
                                 <div style={{ color: curveColors.payoffExpiry }}>
-                                    P(exp): ${tooltipData.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    P(exp): {tooltipData.payoffExpiry >= 0 ? '+' : ''}${tooltipData.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             )}
                             {visibleCurves.payoffNow && (
                                 <div style={{ color: curveColors.payoffNow }}>
-                                    P(now): ${tooltipData.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    P(now): {tooltipData.payoffNow >= 0 ? '+' : ''}${tooltipData.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                             )}
                             {visibleCurves.delta && (
