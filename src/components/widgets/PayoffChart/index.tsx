@@ -64,20 +64,21 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
     const [panX, setPanX] = useState(0);
     const [panY, setPanY] = useState(0);
     const [dragMode, setDragMode] = useState<DragMode>('none');
+    const [hoverZone, setHoverZone] = useState<DragMode>('none');
     const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
-    const [cursor, setCursor] = useState('grab');
 
-    // Get connected sources
+    // Get connected sources - FIXED: properly get sources from connection
     const connectedSources = useMemo(() => {
         const connectedIds = connections
             .filter(c => c.targetId === widgetId)
             .map(c => c.sourceId);
 
         if (connectedIds.length === 0) {
+            // Fallback to allTrades if no explicit connections
             if (allTrades.length > 0) {
                 return [{
                     sourceId: 'default',
-                    label: 'All',
+                    label: 'All Trades',
                     trades: allTrades,
                     color: '#8b5cf6'
                 }] as TradeSource[];
@@ -90,7 +91,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             .filter((s): s is TradeSource => s !== undefined && s.trades.length > 0);
     }, [sourcesMap, connections, allTrades, widgetId]);
 
-    // Auto-detect DTE
+    // Auto-detect DTE from trades
     useEffect(() => {
         if (connectedSources.length > 0 && connectedSources[0].trades.length > 0) {
             const firstTrade = connectedSources[0].trades[0];
@@ -133,74 +134,73 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         };
     }, []);
 
-    const hasData = connectedSources.length > 0;
+    // Aggregate all trades from all connected sources
+    const trades = useMemo(() => {
+        return connectedSources.flatMap((source: TradeSource) => source.trades);
+    }, [connectedSources]);
+
+    const hasData = trades.length > 0;
     const margin = { top: 20, right: 20, bottom: 50, left: 65 };
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
-    // Calculate P&L for each source
+    // Calculate P&L data
     const chartData = useMemo(() => {
         if (!hasData) return null;
 
-        const firstTrade = connectedSources[0]?.trades[0];
-        const baseUnderlying = livePrice || firstTrade?.underlying || firstTrade?.indexPrice || 95000;
+        const baseUnderlying = livePrice || 95000;
         const prices = generatePriceRange(baseUnderlying, 0.25, 60);
         const T = Math.max(0.001, daysToExpiry / 365);
         const r = 0.05;
 
-        const sourcesData = connectedSources.map(source => {
-            const expiryPayoffs: { price: number; pnl: number }[] = [];
-            const currentPayoffs: { price: number; pnl: number }[] = [];
+        const expiryPayoffs: { price: number; pnl: number }[] = [];
+        const currentPayoffs: { price: number; pnl: number }[] = [];
 
-            for (const spotPrice of prices) {
-                let expiryPnL = 0;
-                let currentPnL = 0;
+        for (const spotPrice of prices) {
+            let expiryPnL = 0;
+            let currentPnL = 0;
 
-                for (const trade of source.trades) {
-                    const isCall = trade.type === 'call';
-                    const isLong = trade.direction === 'buy';
-                    const strike = trade.strike;
-                    const size = trade.size || 1;
-                    const premium = (trade.price || 0) * (trade.underlying || trade.indexPrice || baseUnderlying);
-                    const iv = trade.iv ? trade.iv / 100 : 0.8;
+            for (const trade of trades) {
+                const isCall = trade.type === 'call';
+                const isLong = trade.direction === 'buy';
+                const strike = trade.strike;
+                const size = trade.size || 1;
+                const premium = (trade.price || 0) * (trade.underlying || trade.indexPrice || baseUnderlying);
+                const iv = trade.iv ? trade.iv / 100 : 0.8;
 
-                    let intrinsicValue = 0;
-                    if (isCall) {
-                        intrinsicValue = Math.max(0, spotPrice - strike);
-                    } else {
-                        intrinsicValue = Math.max(0, strike - spotPrice);
-                    }
-                    const expiryValue = intrinsicValue * size;
-                    const cost = premium * size;
-                    expiryPnL += isLong ? (expiryValue - cost) : (cost - expiryValue);
-
-                    const currentPrice = calculateOptionPrice(spotPrice, strike, T, r, iv, isCall ? 'call' : 'put');
-                    const currentValue = currentPrice * size;
-                    currentPnL += isLong ? (currentValue - cost) : (cost - currentValue);
+                let intrinsicValue = 0;
+                if (isCall) {
+                    intrinsicValue = Math.max(0, spotPrice - strike);
+                } else {
+                    intrinsicValue = Math.max(0, strike - spotPrice);
                 }
+                const expiryValue = intrinsicValue * size;
+                const cost = premium * size;
+                expiryPnL += isLong ? (expiryValue - cost) : (cost - expiryValue);
 
-                expiryPayoffs.push({ price: spotPrice, pnl: expiryPnL });
-                currentPayoffs.push({ price: spotPrice, pnl: currentPnL });
+                const currentPrice = calculateOptionPrice(spotPrice, strike, T, r, iv, isCall ? 'call' : 'put');
+                const currentValue = currentPrice * size;
+                currentPnL += isLong ? (currentValue - cost) : (cost - currentValue);
             }
 
-            const spotIdx = prices.findIndex(p => p >= livePrice) || Math.floor(prices.length / 2);
-            const pnlAtSpot = expiryPayoffs[spotIdx]?.pnl || 0;
+            expiryPayoffs.push({ price: spotPrice, pnl: expiryPnL });
+            currentPayoffs.push({ price: spotPrice, pnl: currentPnL });
+        }
 
-            return { source, expiryPayoffs, currentPayoffs, pnlAtSpot };
-        });
+        const spotIdx = prices.findIndex(p => p >= livePrice) || Math.floor(prices.length / 2);
+        const pnlAtSpot = expiryPayoffs[spotIdx]?.pnl || 0;
 
         // Calculate bounds
-        const allPnLs = sourcesData.flatMap(d => [...d.expiryPayoffs.map(p => p.pnl), ...d.currentPayoffs.map(p => p.pnl)]);
+        const allPnLs = [...expiryPayoffs.map(p => p.pnl), ...currentPayoffs.map(p => p.pnl)];
         const minPnL = Math.min(...allPnLs) * 1.1;
         const maxPnL = Math.max(...allPnLs) * 1.1;
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
 
-        return { prices, sourcesData, minPnL, maxPnL, minPrice, maxPrice };
-    }, [connectedSources, livePrice, daysToExpiry, hasData]);
+        return { prices, expiryPayoffs, currentPayoffs, minPnL, maxPnL, minPrice, maxPrice, pnlAtSpot };
+    }, [trades, livePrice, daysToExpiry, hasData]);
 
-    const totalPnL = chartData?.sourcesData.reduce((sum, d) => sum + d.pnlAtSpot, 0) || 0;
-    const isProfitable = totalPnL >= 0;
+    const isProfitable = (chartData?.pnlAtSpot || 0) >= 0;
 
     // Base bounds
     const baseBounds = useMemo(() => {
@@ -277,12 +277,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         if (point) {
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
-            const zone = dragMode !== 'none' ? dragMode : getMouseZone(mouseX, mouseY);
-
-            if (zone === 'xAxis') setCursor('ew-resize');
-            else if (zone === 'yAxis') setCursor('ns-resize');
-            else if (zone === 'pan') setCursor(dragMode === 'pan' ? 'grabbing' : 'grab');
-            else setCursor('default');
+            setHoverZone(getMouseZone(mouseX, mouseY));
         }
 
         const dx = event.clientX - dragStart.x;
@@ -299,13 +294,10 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
             setPanX(dragStart.panX - (dx / innerWidth) * xRange);
             setPanY(dragStart.panY + (dy / innerHeight) * yRange);
-        } else if (chartData) {
+        } else if (chartData && point) {
             // Show tooltip
-            const pt = localPoint(event);
-            if (!pt) return;
-
-            const mouseX = pt.x - margin.left;
-            const mouseY = pt.y - margin.top;
+            const mouseX = point.x - margin.left;
+            const mouseY = point.y - margin.top;
 
             if (mouseX < 0 || mouseX > innerWidth || mouseY < 0 || mouseY > innerHeight) {
                 hideTooltip();
@@ -316,27 +308,23 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             const price = xScale.invert(mouseX);
             const pnlValue = yScale.invert(mouseY);
 
-            const values = chartData.sourcesData.flatMap(data => {
-                const result: { label: string; value: number; color: string }[] = [];
+            const values: { label: string; value: number; color: string }[] = [];
 
-                if (showExpiry) {
-                    const idx = Math.min(bisectPrice(data.expiryPayoffs, price, 1) - 1, data.expiryPayoffs.length - 1);
-                    const d = data.expiryPayoffs[Math.max(0, idx)];
-                    if (d) {
-                        result.push({ label: `${data.source.label} Expiry`, value: d.pnl, color: data.source.color || '#a855f7' });
-                    }
+            if (showExpiry) {
+                const idx = Math.min(bisectPrice(chartData.expiryPayoffs, price, 1) - 1, chartData.expiryPayoffs.length - 1);
+                const d = chartData.expiryPayoffs[Math.max(0, idx)];
+                if (d) {
+                    values.push({ label: 'P&L at Expiry', value: d.pnl, color: '#a855f7' });
                 }
+            }
 
-                if (showNow) {
-                    const idx = Math.min(bisectPrice(data.currentPayoffs, price, 1) - 1, data.currentPayoffs.length - 1);
-                    const d = data.currentPayoffs[Math.max(0, idx)];
-                    if (d) {
-                        result.push({ label: `${data.source.label} Now`, value: d.pnl, color: '#22d3ee' });
-                    }
+            if (showNow) {
+                const idx = Math.min(bisectPrice(chartData.currentPayoffs, price, 1) - 1, chartData.currentPayoffs.length - 1);
+                const d = chartData.currentPayoffs[Math.max(0, idx)];
+                if (d) {
+                    values.push({ label: 'P&L Now', value: d.pnl, color: '#22d3ee' });
                 }
-
-                return result;
-            });
+            }
 
             const primaryPnL = values.length > 0 ? values[0].value : pnlValue;
 
@@ -344,8 +332,8 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
 
             showTooltip({
                 tooltipData: { price, pnl: primaryPnL, values },
-                tooltipLeft: pt.x,
-                tooltipTop: pt.y,
+                tooltipLeft: point.x,
+                tooltipTop: point.y,
             });
         }
     }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, chartData, xScale, yScale, margin, bisectPrice, showExpiry, showNow, showTooltip, hideTooltip, getMouseZone]);
@@ -356,6 +344,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
 
     const handleMouseLeave = useCallback(() => {
         setDragMode('none');
+        setHoverZone('none');
         hideTooltip();
         setCrosshairPos(null);
     }, [hideTooltip]);
@@ -374,6 +363,15 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
         setPanX(0);
         setPanY(0);
     }, []);
+
+    // Get cursor
+    const getCursor = () => {
+        if (dragMode === 'xAxis' || hoverZone === 'xAxis') return 'ew-resize';
+        if (dragMode === 'yAxis' || hoverZone === 'yAxis') return 'ns-resize';
+        if (dragMode === 'pan') return 'grabbing';
+        if (hoverZone === 'pan') return 'grab';
+        return 'default';
+    };
 
     if (!hasData) {
         return (
@@ -401,7 +399,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${isProfitable ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
                     {isProfitable ? <TrendingUp size={14} className="text-green-400" /> : <TrendingDown size={14} className="text-red-400" />}
                     <span className={`text-sm font-mono font-bold ${isProfitable ? 'text-green-400' : 'text-red-400'}`}>
-                        {isProfitable ? '+' : ''}${totalPnL.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        {isProfitable ? '+' : ''}${(chartData?.pnlAtSpot || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                 </div>
 
@@ -435,7 +433,7 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                         <svg
                             width={dimensions.width}
                             height={dimensions.height}
-                            style={{ cursor, touchAction: 'none' }}
+                            style={{ cursor: getCursor(), touchAction: 'none' }}
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
@@ -449,13 +447,11 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     <clipPath id={`clip-payoff-${widgetId}`}>
                                         <rect width={innerWidth} height={innerHeight} />
                                     </clipPath>
-                                    {chartData.sourcesData.map((data, idx) => (
-                                        <linearGradient key={idx} id={`gradient-${widgetId}-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
-                                            <stop offset="50%" stopColor="transparent" stopOpacity={0} />
-                                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
-                                        </linearGradient>
-                                    ))}
+                                    <linearGradient id={`gradient-${widgetId}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+                                        <stop offset="50%" stopColor="transparent" stopOpacity={0} />
+                                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                                    </linearGradient>
                                 </defs>
 
                                 {/* Grid */}
@@ -473,42 +469,38 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
 
                                 {/* P&L curves */}
                                 <g clipPath={`url(#clip-payoff-${widgetId})`}>
-                                    {chartData.sourcesData.map((data, idx) => (
-                                        <g key={data.source.sourceId}>
-                                            {showExpiry && (
-                                                <>
-                                                    <AreaClosed
-                                                        data={data.expiryPayoffs}
-                                                        x={d => xScale(d.price)}
-                                                        y={d => yScale(d.pnl)}
-                                                        yScale={yScale}
-                                                        curve={curveMonotoneX}
-                                                        fill={`url(#gradient-${widgetId}-${idx})`}
-                                                        opacity={0.3}
-                                                    />
-                                                    <LinePath
-                                                        data={data.expiryPayoffs}
-                                                        x={d => xScale(d.price)}
-                                                        y={d => yScale(d.pnl)}
-                                                        stroke={data.source.color || '#a855f7'}
-                                                        strokeWidth={2}
-                                                        curve={curveMonotoneX}
-                                                    />
-                                                </>
-                                            )}
-                                            {showNow && (
-                                                <LinePath
-                                                    data={data.currentPayoffs}
-                                                    x={d => xScale(d.price)}
-                                                    y={d => yScale(d.pnl)}
-                                                    stroke="#22d3ee"
-                                                    strokeWidth={2}
-                                                    strokeDasharray="5,5"
-                                                    curve={curveMonotoneX}
-                                                />
-                                            )}
-                                        </g>
-                                    ))}
+                                    {showExpiry && (
+                                        <>
+                                            <AreaClosed
+                                                data={chartData.expiryPayoffs}
+                                                x={d => xScale(d.price)}
+                                                y={d => yScale(d.pnl)}
+                                                yScale={yScale}
+                                                curve={curveMonotoneX}
+                                                fill={`url(#gradient-${widgetId})`}
+                                                opacity={0.3}
+                                            />
+                                            <LinePath
+                                                data={chartData.expiryPayoffs}
+                                                x={d => xScale(d.price)}
+                                                y={d => yScale(d.pnl)}
+                                                stroke="#a855f7"
+                                                strokeWidth={2}
+                                                curve={curveMonotoneX}
+                                            />
+                                        </>
+                                    )}
+                                    {showNow && (
+                                        <LinePath
+                                            data={chartData.currentPayoffs}
+                                            x={d => xScale(d.price)}
+                                            y={d => yScale(d.pnl)}
+                                            stroke="#22d3ee"
+                                            strokeWidth={2}
+                                            strokeDasharray="5,5"
+                                            curve={curveMonotoneX}
+                                        />
+                                    )}
                                 </g>
 
                                 {/* Crosshair */}
@@ -520,7 +512,14 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     </>
                                 )}
 
-                                {/* Axes */}
+                                {/* Y Axis with highlight zone */}
+                                <rect
+                                    x={-margin.left}
+                                    y={0}
+                                    width={margin.left}
+                                    height={innerHeight}
+                                    fill={hoverZone === 'yAxis' || dragMode === 'yAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
+                                />
                                 <AxisLeft
                                     scale={yScale}
                                     stroke="#484f58"
@@ -528,6 +527,15 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
                                     tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: '0.33em', dx: -4 })}
                                     tickFormat={(v) => `$${Number(v).toLocaleString()}`}
                                     numTicks={5}
+                                />
+
+                                {/* X Axis with highlight zone */}
+                                <rect
+                                    x={0}
+                                    y={innerHeight}
+                                    width={innerWidth}
+                                    height={margin.bottom}
+                                    fill={hoverZone === 'xAxis' || dragMode === 'xAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
                                 />
                                 <AxisBottom
                                     scale={xScale}
@@ -570,22 +578,8 @@ export function PayoffChartWidget({ widgetId }: PayoffChartProps) {
             </div>
 
             {/* Footer */}
-            <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] flex items-center gap-4 text-xs">
-                {chartData?.sourcesData.map(data => {
-                    const pnl = data.pnlAtSpot;
-                    const isProfit = pnl >= 0;
-                    return (
-                        <div key={data.source.sourceId} className="flex items-center gap-2">
-                            <span style={{ color: data.source.color }} className="font-medium">{data.source.label}</span>
-                            <span className={`font-mono ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-                                {isProfit ? '+' : ''}${pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </span>
-                        </div>
-                    );
-                })}
-                <div className="ml-auto text-gray-500 text-[9px]">
-                    Drag axis to scale • Drag chart to pan • Scroll to zoom
-                </div>
+            <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[9px] text-gray-500 text-center">
+                Drag axes to scale • Drag chart to pan • Scroll to zoom
             </div>
         </div>
     );

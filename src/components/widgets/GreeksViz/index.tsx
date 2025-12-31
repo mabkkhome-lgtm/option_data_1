@@ -23,13 +23,6 @@ interface GreeksVizProps {
     widgetId: string;
 }
 
-interface SourceGreeksData {
-    source: TradeSource;
-    prices: number[];
-    greeks: Record<GreekType, { price: number; value: number }[]>;
-    greeksAtSpot: Record<GreekType, number>;
-}
-
 const greekColors: Record<GreekType, string> = {
     delta: '#22c55e',
     gamma: '#a855f7',
@@ -90,8 +83,8 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
     const [panX, setPanX] = useState(0);
     const [panY, setPanY] = useState(0);
     const [dragMode, setDragMode] = useState<DragMode>('none');
+    const [hoverZone, setHoverZone] = useState<DragMode>('none');
     const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
-    const [cursor, setCursor] = useState('grab');
 
     // Get connected sources
     const connectedSources = useMemo(() => {
@@ -103,7 +96,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             if (allTrades.length > 0) {
                 return [{
                     sourceId: 'default',
-                    label: 'All',
+                    label: 'All Trades',
                     trades: allTrades,
                     color: '#8b5cf6'
                 }] as TradeSource[];
@@ -146,7 +139,12 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         };
     }, []);
 
-    const hasData = connectedSources.length > 0;
+    // Get all trades from all sources
+    const trades = useMemo(() => {
+        return connectedSources.flatMap((source: TradeSource) => source.trades);
+    }, [connectedSources]);
+
+    const hasData = trades.length > 0;
     const margin = { top: 20, right: 20, bottom: 50, left: 65 };
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
@@ -155,69 +153,53 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         setVisibleGreeks(prev => ({ ...prev, [greek]: !prev[greek] }));
     };
 
-    // Calculate Greeks for each source
-    const perSourceData = useMemo((): SourceGreeksData[] => {
-        if (!hasData) return [];
+    // Calculate Greeks aggregated from all trades
+    const greekData = useMemo(() => {
+        if (!hasData) return null;
 
-        const firstTrade = connectedSources[0]?.trades[0];
-        const baseUnderlying = livePrice || firstTrade?.underlying || firstTrade?.indexPrice || 95000;
-
-        const prices = generatePriceRange(baseUnderlying, 0.25, 60);
+        const prices = generatePriceRange(livePrice, 0.25, 60);
         const T = Math.max(0.001, daysToExpiry / 365);
 
-        return connectedSources.map(source => {
-            const greeks: Record<GreekType, { price: number; value: number }[]> = {
-                delta: [], gamma: [], theta: [], vega: []
-            };
-            const greeksAtSpot: Record<GreekType, number> = {
-                delta: 0, gamma: 0, theta: 0, vega: 0
-            };
+        const greeks: Record<GreekType, { price: number; value: number }[]> = {
+            delta: [], gamma: [], theta: [], vega: []
+        };
 
-            for (const price of prices) {
-                let deltaSum = 0, gammaSum = 0, thetaSum = 0, vegaSum = 0;
+        for (const price of prices) {
+            let deltaSum = 0, gammaSum = 0, thetaSum = 0, vegaSum = 0;
 
-                for (const trade of source.trades) {
-                    const strike = trade.strike || 0;
-                    const isCall = trade.type === 'call';
-                    const isLong = trade.direction === 'buy';
-                    const size = trade.size || 1;
-                    const iv = trade.iv ? trade.iv / 100 : 0.8;
-                    const multiplier = isLong ? size : -size;
+            for (const trade of trades) {
+                const strike = trade.strike || 0;
+                const isCall = trade.type === 'call';
+                const isLong = trade.direction === 'buy';
+                const size = trade.size || 1;
+                const iv = trade.iv ? trade.iv / 100 : 0.8;
+                const multiplier = isLong ? size : -size;
 
-                    const g = calculateGreeks(price, strike, T, 0.05, iv, isCall ? 'call' : 'put');
-                    deltaSum += g.delta * multiplier;
-                    gammaSum += g.gamma * multiplier;
-                    thetaSum += g.theta * multiplier;
-                    vegaSum += g.vega * multiplier;
-                }
-
-                greeks.delta.push({ price, value: deltaSum });
-                greeks.gamma.push({ price, value: gammaSum });
-                greeks.theta.push({ price, value: thetaSum });
-                greeks.vega.push({ price, value: vegaSum });
+                const g = calculateGreeks(price, strike, T, 0.05, iv, isCall ? 'call' : 'put');
+                deltaSum += g.delta * multiplier;
+                gammaSum += g.gamma * multiplier;
+                thetaSum += g.theta * multiplier;
+                vegaSum += g.vega * multiplier;
             }
 
-            const spotIdx = Math.floor(prices.length / 2);
-            greeksAtSpot.delta = greeks.delta[spotIdx]?.value || 0;
-            greeksAtSpot.gamma = greeks.gamma[spotIdx]?.value || 0;
-            greeksAtSpot.theta = greeks.theta[spotIdx]?.value || 0;
-            greeksAtSpot.vega = greeks.vega[spotIdx]?.value || 0;
+            greeks.delta.push({ price, value: deltaSum });
+            greeks.gamma.push({ price, value: gammaSum });
+            greeks.theta.push({ price, value: thetaSum });
+            greeks.vega.push({ price, value: vegaSum });
+        }
 
-            return { source, prices, greeks, greeksAtSpot };
-        });
-    }, [connectedSources, livePrice, daysToExpiry, hasData]);
+        return { prices, greeks };
+    }, [trades, livePrice, daysToExpiry, hasData]);
 
     // Calculate chart bounds
     const baseBounds = useMemo(() => {
-        if (perSourceData.length === 0) return { minX: 80000, maxX: 110000, minY: -1, maxY: 1 };
+        if (!greekData) return { minX: 80000, maxX: 110000, minY: -1, maxY: 1 };
 
-        const allPrices = perSourceData[0]?.prices || [];
-        const minX = Math.min(...allPrices);
-        const maxX = Math.max(...allPrices);
+        const minX = Math.min(...greekData.prices);
+        const maxX = Math.max(...greekData.prices);
 
-        // Get combined min/max for visible Greeks (normalized)
         return { minX, maxX, minY: -1.2, maxY: 1.2 };
-    }, [perSourceData]);
+    }, [greekData]);
 
     // Get normalized data for a Greek
     const getNormalizedGreekData = useCallback((greek: GreekType, data: { price: number; value: number }[]) => {
@@ -296,12 +278,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         if (point) {
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
-            const zone = dragMode !== 'none' ? dragMode : getMouseZone(mouseX, mouseY);
-
-            if (zone === 'xAxis') setCursor('ew-resize');
-            else if (zone === 'yAxis') setCursor('ns-resize');
-            else if (zone === 'pan') setCursor(dragMode === 'pan' ? 'grabbing' : 'grab');
-            else setCursor('default');
+            setHoverZone(getMouseZone(mouseX, mouseY));
         }
 
         const dx = event.clientX - dragStart.x;
@@ -318,13 +295,10 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
             setPanX(dragStart.panX - (dx / innerWidth) * xRange);
             setPanY(dragStart.panY + (dy / innerHeight) * yRange);
-        } else if (perSourceData.length > 0) {
+        } else if (greekData && point) {
             // Show tooltip
-            const pt = localPoint(event);
-            if (!pt) return;
-
-            const mouseX = pt.x - margin.left;
-            const mouseY = pt.y - margin.top;
+            const mouseX = point.x - margin.left;
+            const mouseY = point.y - margin.top;
 
             if (mouseX < 0 || mouseX > innerWidth || mouseY < 0 || mouseY > innerHeight) {
                 hideTooltip();
@@ -337,30 +311,28 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
             setCrosshairPos({ x: mouseX, y: mouseY, price });
 
             const values: { label: string; value: number; color: string }[] = [];
-            for (const sourceData of perSourceData) {
-                for (const greek of Object.keys(visibleGreeks) as GreekType[]) {
-                    if (visibleGreeks[greek]) {
-                        const data = sourceData.greeks[greek];
-                        const idx = Math.min(bisectPrice(data, price, 1) - 1, data.length - 1);
-                        const d = data[Math.max(0, idx)];
-                        if (d) {
-                            values.push({
-                                label: `${sourceData.source.label} ${greekLabels[greek]}`,
-                                value: d.value,
-                                color: greekColors[greek],
-                            });
-                        }
+            for (const greek of Object.keys(visibleGreeks) as GreekType[]) {
+                if (visibleGreeks[greek]) {
+                    const data = greekData.greeks[greek];
+                    const idx = Math.min(bisectPrice(data, price, 1) - 1, data.length - 1);
+                    const d = data[Math.max(0, idx)];
+                    if (d) {
+                        values.push({
+                            label: greekLabels[greek],
+                            value: d.value,
+                            color: greekColors[greek],
+                        });
                     }
                 }
             }
 
             showTooltip({
                 tooltipData: { price, values },
-                tooltipLeft: pt.x,
-                tooltipTop: pt.y,
+                tooltipLeft: point.x,
+                tooltipTop: point.y,
             });
         }
-    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, perSourceData, xScale, margin, bisectPrice, visibleGreeks, showTooltip, hideTooltip, getMouseZone]);
+    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, greekData, xScale, margin, bisectPrice, visibleGreeks, showTooltip, hideTooltip, getMouseZone]);
 
     const handleMouseUp = useCallback(() => {
         setDragMode('none');
@@ -368,6 +340,7 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
 
     const handleMouseLeave = useCallback(() => {
         setDragMode('none');
+        setHoverZone('none');
         hideTooltip();
         setCrosshairPos(null);
     }, [hideTooltip]);
@@ -386,6 +359,15 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
         setPanX(0);
         setPanY(0);
     }, []);
+
+    // Get cursor
+    const getCursor = () => {
+        if (dragMode === 'xAxis' || hoverZone === 'xAxis') return 'ew-resize';
+        if (dragMode === 'yAxis' || hoverZone === 'yAxis') return 'ns-resize';
+        if (dragMode === 'pan') return 'grabbing';
+        if (hoverZone === 'pan') return 'grab';
+        return 'default';
+    };
 
     if (!hasData) {
         return (
@@ -415,11 +397,11 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                         <button
                             key={greek}
                             onClick={() => toggleGreek(greek)}
-                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${visibleGreeks[greek]
-                                ? 'text-white'
-                                : 'text-gray-600 hover:text-gray-400'
-                                }`}
-                            style={{ backgroundColor: visibleGreeks[greek] ? greekColors[greek] + '40' : 'transparent', color: visibleGreeks[greek] ? greekColors[greek] : undefined }}
+                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${visibleGreeks[greek] ? 'text-white' : 'text-gray-600 hover:text-gray-400'}`}
+                            style={{
+                                backgroundColor: visibleGreeks[greek] ? greekColors[greek] + '40' : 'transparent',
+                                color: visibleGreeks[greek] ? greekColors[greek] : undefined
+                            }}
                         >
                             {greekLabels[greek].split(' ')[0]}
                         </button>
@@ -453,12 +435,12 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 className="flex-1 min-h-0 nodrag nowheel nopan"
                 style={{ touchAction: 'none', position: 'relative', overflow: 'hidden' }}
             >
-                {innerWidth > 0 && innerHeight > 0 && (
+                {innerWidth > 0 && innerHeight > 0 && greekData && (
                     <>
                         <svg
                             width={dimensions.width}
                             height={dimensions.height}
-                            style={{ cursor, touchAction: 'none' }}
+                            style={{ cursor: getCursor(), touchAction: 'none' }}
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
@@ -486,25 +468,21 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
 
                                 {/* Greek curves */}
                                 <g clipPath={`url(#clip-greeks-${widgetId})`}>
-                                    {perSourceData.map((sourceData) => (
-                                        <g key={sourceData.source.sourceId}>
-                                            {(Object.keys(visibleGreeks) as GreekType[]).map(greek => {
-                                                if (!visibleGreeks[greek]) return null;
-                                                const normalizedData = getNormalizedGreekData(greek, sourceData.greeks[greek]);
-                                                return (
-                                                    <LinePath
-                                                        key={greek}
-                                                        data={normalizedData}
-                                                        x={d => xScale(d.price)}
-                                                        y={d => yScale(d.value)}
-                                                        stroke={greekColors[greek]}
-                                                        strokeWidth={2}
-                                                        curve={curveMonotoneX}
-                                                    />
-                                                );
-                                            })}
-                                        </g>
-                                    ))}
+                                    {(Object.keys(visibleGreeks) as GreekType[]).map(greek => {
+                                        if (!visibleGreeks[greek]) return null;
+                                        const normalizedData = getNormalizedGreekData(greek, greekData.greeks[greek]);
+                                        return (
+                                            <LinePath
+                                                key={greek}
+                                                data={normalizedData}
+                                                x={d => xScale(d.price)}
+                                                y={d => yScale(d.value)}
+                                                stroke={greekColors[greek]}
+                                                strokeWidth={2}
+                                                curve={curveMonotoneX}
+                                            />
+                                        );
+                                    })}
                                 </g>
 
                                 {/* Crosshair */}
@@ -515,13 +493,29 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                                     </>
                                 )}
 
-                                {/* Axes */}
+                                {/* Y Axis with highlight zone */}
+                                <rect
+                                    x={-margin.left}
+                                    y={0}
+                                    width={margin.left}
+                                    height={innerHeight}
+                                    fill={hoverZone === 'yAxis' || dragMode === 'yAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
+                                />
                                 <AxisLeft
                                     scale={yScale}
                                     stroke="rgba(125, 133, 144, 0.3)"
                                     tickStroke="rgba(125, 133, 144, 0.3)"
                                     tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: 4 })}
                                     numTicks={6}
+                                />
+
+                                {/* X Axis with highlight zone */}
+                                <rect
+                                    x={0}
+                                    y={innerHeight}
+                                    width={innerWidth}
+                                    height={margin.bottom}
+                                    fill={hoverZone === 'xAxis' || dragMode === 'xAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
                                 />
                                 <AxisBottom
                                     scale={xScale}
@@ -555,9 +549,9 @@ export function GreeksVizWidget({ widgetId }: GreeksVizProps) {
                 )}
             </div>
 
-            {/* Footer hint */}
+            {/* Footer */}
             <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[9px] text-gray-500 text-center">
-                Drag axis to scale • Drag chart to pan • Scroll to zoom
+                Drag axes to scale • Drag chart to pan • Scroll to zoom
             </div>
         </div>
     );

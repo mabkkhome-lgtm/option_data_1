@@ -73,14 +73,13 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     });
     const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number; price: number } | null>(null);
 
-    // Zoom/Pan state - Thales style
+    // Thales-style zoom/pan state
     const [zoomX, setZoomX] = useState(1);
     const [zoomY, setZoomY] = useState(1);
     const [panX, setPanX] = useState(0);
     const [panY, setPanY] = useState(0);
-
-    // Drag state
     const [dragMode, setDragMode] = useState<DragMode>('none');
+    const [hoverZone, setHoverZone] = useState<DragMode>('none');
     const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
 
     // Use correct store properties
@@ -92,17 +91,18 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const { showTooltip, hideTooltip, tooltipData, tooltipLeft, tooltipTop, tooltipOpen } =
         useTooltip<TooltipData>();
 
-    // Get connected sources
+    // Get connected sources - FIXED: properly handle multiple connections
     const connectedSources = useMemo(() => {
         const connectedIds = connections
             .filter(c => c.targetId === widgetId)
             .map(c => c.sourceId);
 
         if (connectedIds.length === 0) {
+            // Fallback to all trades if no connections
             if (allTrades.length > 0) {
                 return [{
                     sourceId: 'default',
-                    label: 'All',
+                    label: 'All Trades',
                     trades: allTrades,
                     color: '#8b5cf6'
                 }] as TradeSource[];
@@ -110,6 +110,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             return [];
         }
 
+        // Get all connected sources
         return connectedIds
             .map(id => sourcesMap.get(id))
             .filter((s): s is TradeSource => s !== undefined && s.trades.length > 0);
@@ -145,7 +146,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         };
     }, []);
 
-    // Get trades from connected sources
+    // Get ALL trades from ALL connected sources - FIXED: aggregate properly
     const trades = useMemo(() => {
         return connectedSources.flatMap((source: TradeSource) => source.trades);
     }, [connectedSources]);
@@ -156,16 +157,12 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
-    // Axis interaction zones
-    const xAxisZone = { top: innerHeight, bottom: innerHeight + margin.bottom };
-    const yAxisZone = { left: -margin.left, right: 0 };
-
-    // Generate price range
+    // Generate price range centered on live price
     const prices = useMemo(() => {
         return generatePriceRange(livePrice, 0.30, 150);
     }, [livePrice]);
 
-    // Calculate RAW data points
+    // Calculate RAW data points - FIXED: aggregate from ALL trades
     const rawData = useMemo((): ChartDataSet | null => {
         if (!hasData) return null;
 
@@ -183,6 +180,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             let totalGamma = 0;
             let totalPayoffNow = 0;
 
+            // Sum across ALL trades from ALL connected sources
             for (const trade of trades) {
                 const strike = trade.strike;
                 const type = trade.type as 'call' | 'put';
@@ -216,7 +214,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         return { payoffExpiry, payoffNow, delta, gamma };
     }, [hasData, trades, prices, daysToExpiry]);
 
-    // Calculate bounds and scaling
+    // Calculate bounds
     const curveScales = useMemo(() => {
         if (!rawData) return null;
 
@@ -271,11 +269,15 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         };
     }, [rawData, curveScales]);
 
-    // Base chart bounds
+    // Base chart bounds - CENTERED on zero for break-even visibility
     const baseBounds = useMemo(() => {
         if (!curveScales) {
             return { minX: prices[0], maxX: prices[prices.length - 1], minY: -10000, maxY: 10000 };
         }
+        // Ensure zero is visible and centered if possible
+        const yRange = curveScales.maxY - curveScales.minY;
+        const yCenter = (curveScales.maxY + curveScales.minY) / 2;
+
         return {
             minX: prices[0],
             maxX: prices[prices.length - 1],
@@ -313,17 +315,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     // Bisector for tooltip
     const bisectPrice = bisector<DataPoint, number>(d => d.price).left;
 
-    // Determine if mouse is on axis
+    // Determine mouse zone
     const getMouseZone = useCallback((mouseX: number, mouseY: number): DragMode => {
-        // Check if on X axis (bottom area)
         if (mouseY > innerHeight && mouseY < innerHeight + margin.bottom && mouseX >= 0 && mouseX <= innerWidth) {
             return 'xAxis';
         }
-        // Check if on Y axis (left area)
         if (mouseX < 0 && mouseX > -margin.left && mouseY >= 0 && mouseY <= innerHeight) {
             return 'yAxis';
         }
-        // Otherwise in chart area
         if (mouseX >= 0 && mouseX <= innerWidth && mouseY >= 0 && mouseY <= innerHeight) {
             return 'pan';
         }
@@ -341,42 +340,35 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
         if (mode !== 'none') {
             setDragMode(mode);
-            setDragStart({
-                x: event.clientX,
-                y: event.clientY,
-                zoomX,
-                zoomY,
-                panX,
-                panY,
-            });
+            setDragStart({ x: event.clientX, y: event.clientY, zoomX, zoomY, panX, panY });
         }
     }, [margin, getMouseZone, zoomX, zoomY, panX, panY]);
 
     // Handle mouse move
     const handleMouseMove = useCallback((event: React.MouseEvent) => {
+        const point = localPoint(event);
+        if (point) {
+            const mouseX = point.x - margin.left;
+            const mouseY = point.y - margin.top;
+            setHoverZone(getMouseZone(mouseX, mouseY));
+        }
+
         const dx = event.clientX - dragStart.x;
         const dy = event.clientY - dragStart.y;
 
         if (dragMode === 'xAxis') {
-            // Drag right = expand (more zoom), drag left = compress (less zoom)
             const zoomChange = 1 + dx / 200;
             setZoomX(Math.max(0.1, Math.min(10, dragStart.zoomX * zoomChange)));
         } else if (dragMode === 'yAxis') {
-            // Drag up = expand (more zoom), drag down = compress (less zoom)
             const zoomChange = 1 - dy / 200;
             setZoomY(Math.max(0.1, Math.min(10, dragStart.zoomY * zoomChange)));
         } else if (dragMode === 'pan') {
-            // Pan the chart
             const xRange = (baseBounds.maxX - baseBounds.minX) / zoomX;
             const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
-
             setPanX(dragStart.panX - (dx / innerWidth) * xRange);
             setPanY(dragStart.panY + (dy / innerHeight) * yRange);
-        } else if (rawData) {
+        } else if (rawData && point) {
             // Show tooltip
-            const point = localPoint(event);
-            if (!point) return;
-
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
 
@@ -406,7 +398,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 tooltipTop: point.y,
             });
         }
-    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip]);
+    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip, getMouseZone]);
 
     const handleMouseUp = useCallback(() => {
         setDragMode('none');
@@ -414,21 +406,19 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
     const handleMouseLeave = useCallback(() => {
         setDragMode('none');
+        setHoverZone('none');
         hideTooltip();
         setCrosshairPos(null);
     }, [hideTooltip]);
 
-    // Mouse wheel for zoom (both axes)
     const handleWheel = useCallback((event: React.WheelEvent) => {
         event.preventDefault();
         event.stopPropagation();
-
         const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
         setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
         setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
     }, []);
 
-    // Reset view
     const resetView = useCallback(() => {
         setZoomX(1);
         setZoomY(1);
@@ -440,31 +430,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         setVisibleCurves(prev => ({ ...prev, [curve]: !prev[curve] }));
     };
 
-    // Get cursor style based on position
-    const getCursor = useCallback((mouseX: number, mouseY: number): string => {
-        if (dragMode === 'xAxis') return 'ew-resize';
-        if (dragMode === 'yAxis') return 'ns-resize';
+    // Get cursor
+    const getCursor = () => {
+        if (dragMode === 'xAxis' || hoverZone === 'xAxis') return 'ew-resize';
+        if (dragMode === 'yAxis' || hoverZone === 'yAxis') return 'ns-resize';
         if (dragMode === 'pan') return 'grabbing';
-
-        const zone = getMouseZone(mouseX, mouseY);
-        if (zone === 'xAxis') return 'ew-resize';
-        if (zone === 'yAxis') return 'ns-resize';
-        if (zone === 'pan') return 'grab';
+        if (hoverZone === 'pan') return 'grab';
         return 'default';
-    }, [dragMode, getMouseZone]);
-
-    const [cursor, setCursor] = useState('grab');
-
-    // Update cursor on mouse move
-    const handleMouseMoveForCursor = useCallback((event: React.MouseEvent) => {
-        const point = localPoint(event);
-        if (point) {
-            const mouseX = point.x - margin.left;
-            const mouseY = point.y - margin.top;
-            setCursor(getCursor(mouseX, mouseY));
-        }
-        handleMouseMove(event);
-    }, [getCursor, margin, handleMouseMove]);
+    };
 
     if (!hasData) {
         return (
@@ -496,6 +469,13 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 </div>
 
                 <div className="flex-1" />
+
+                {/* Connection info */}
+                {connectedSources.length > 0 && (
+                    <div className="text-[9px] text-gray-500">
+                        {trades.length} trades from {connectedSources.length} source{connectedSources.length > 1 ? 's' : ''}
+                    </div>
+                )}
 
                 {/* Live price */}
                 <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
@@ -538,9 +518,9 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                         <svg
                             width={dimensions.width}
                             height={dimensions.height}
-                            style={{ cursor, touchAction: 'none' }}
+                            style={{ cursor: getCursor(), touchAction: 'none' }}
                             onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMoveForCursor}
+                            onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
                             onMouseLeave={handleMouseLeave}
                             onWheel={handleWheel}
@@ -548,7 +528,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
                             <Group left={margin.left} top={margin.top}>
-                                {/* Clip path */}
                                 <defs>
                                     <clipPath id={`clip-${widgetId}`}>
                                         <rect width={innerWidth} height={innerHeight} />
@@ -560,67 +539,24 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                 <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
                                 {/* Zero line - BREAK-EVEN */}
-                                <line
-                                    x1={0}
-                                    x2={innerWidth}
-                                    y1={yScale(0)}
-                                    y2={yScale(0)}
-                                    stroke="#58a6ff"
-                                    strokeWidth={1.5}
-                                />
+                                <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="#58a6ff" strokeWidth={1.5} />
 
                                 {/* Current price line */}
-                                <line
-                                    x1={xScale(livePrice)}
-                                    x2={xScale(livePrice)}
-                                    y1={0}
-                                    y2={innerHeight}
-                                    stroke="rgba(255,255,255,0.5)"
-                                    strokeWidth={1}
-                                    strokeDasharray="4,4"
-                                />
+                                <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.5)" strokeWidth={1} strokeDasharray="4,4" />
 
                                 {/* Curves */}
                                 <g clipPath={`url(#clip-${widgetId})`}>
                                     {visibleCurves.payoffExpiry && (
-                                        <LinePath
-                                            data={scaledData.payoffExpiry}
-                                            x={d => xScale(d.price)}
-                                            y={d => yScale(d.value)}
-                                            stroke={curveColors.payoffExpiry}
-                                            strokeWidth={2}
-                                            curve={curveMonotoneX}
-                                        />
+                                        <LinePath data={scaledData.payoffExpiry} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffExpiry} strokeWidth={2} curve={curveMonotoneX} />
                                     )}
                                     {visibleCurves.payoffNow && (
-                                        <LinePath
-                                            data={scaledData.payoffNow}
-                                            x={d => xScale(d.price)}
-                                            y={d => yScale(d.value)}
-                                            stroke={curveColors.payoffNow}
-                                            strokeWidth={2}
-                                            curve={curveMonotoneX}
-                                        />
+                                        <LinePath data={scaledData.payoffNow} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffNow} strokeWidth={2} curve={curveMonotoneX} />
                                     )}
                                     {visibleCurves.delta && (
-                                        <LinePath
-                                            data={scaledData.delta}
-                                            x={d => xScale(d.price)}
-                                            y={d => yScale(d.value)}
-                                            stroke={curveColors.delta}
-                                            strokeWidth={2}
-                                            curve={curveMonotoneX}
-                                        />
+                                        <LinePath data={scaledData.delta} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.delta} strokeWidth={2} curve={curveMonotoneX} />
                                     )}
                                     {visibleCurves.gamma && (
-                                        <LinePath
-                                            data={scaledData.gamma}
-                                            x={d => xScale(d.price)}
-                                            y={d => yScale(d.value)}
-                                            stroke={curveColors.gamma}
-                                            strokeWidth={2}
-                                            curve={curveMonotoneX}
-                                        />
+                                        <LinePath data={scaledData.gamma} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.gamma} strokeWidth={2} curve={curveMonotoneX} />
                                     )}
                                 </g>
 
@@ -632,13 +568,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     </>
                                 )}
 
-                                {/* Y Axis - draggable zone */}
+                                {/* Y Axis with highlight zone */}
                                 <rect
                                     x={-margin.left}
                                     y={0}
                                     width={margin.left}
                                     height={innerHeight}
-                                    fill="transparent"
+                                    fill={hoverZone === 'yAxis' || dragMode === 'yAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
+                                    style={{ cursor: 'ns-resize' }}
                                 />
                                 <AxisLeft
                                     scale={yScale}
@@ -653,18 +590,19 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                     numTicks={6}
                                 />
 
-                                {/* X Axis - draggable zone */}
+                                {/* X Axis with highlight zone */}
                                 <rect
                                     x={0}
                                     y={innerHeight}
                                     width={innerWidth}
                                     height={margin.bottom}
-                                    fill="transparent"
+                                    fill={hoverZone === 'xAxis' || dragMode === 'xAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
+                                    style={{ cursor: 'ew-resize' }}
                                 />
                                 <AxisBottom
                                     scale={xScale}
                                     top={innerHeight}
-                                    tickFormat={v => `${(Number(v) / 1000).toFixed(0)},000`}
+                                    tickFormat={v => `${(Number(v) / 1000).toFixed(0)}K`}
                                     stroke="rgba(125, 133, 144, 0.3)"
                                     tickStroke="rgba(125, 133, 144, 0.3)"
                                     tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'middle', dy: -4 })}
@@ -707,9 +645,9 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 )}
             </div>
 
-            {/* Footer hint */}
+            {/* Footer */}
             <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[9px] text-gray-500 text-center">
-                Drag axis to scale • Drag chart to pan • Scroll to zoom
+                Drag axes to scale • Drag chart to pan • Scroll to zoom
             </div>
         </div>
     );
