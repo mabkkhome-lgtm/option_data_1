@@ -578,6 +578,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             {/* Current price line */}
                             <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.6)" strokeWidth={1} strokeDasharray="4,4" />
 
+                            {/* Curves per source */}
                             <g clipPath={`url(#clip-${widgetId})`}>
                                 {perSourceData.map((source, idx) => {
                                     const colors = getSourceColor(source.label, idx);
@@ -658,13 +659,22 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                                             />
                                                             <text
                                                                 x={xScale(maxGammaPrice)}
-                                                                y={getGammaY(maxGammaVal) - 6}
+                                                                y={getGammaY(maxGammaVal) - 8}
                                                                 fill="#a855f7"
                                                                 fontSize={9}
                                                                 textAnchor="middle"
                                                                 fontWeight="bold"
                                                             >
                                                                 Max Γ
+                                                            </text>
+                                                            <text
+                                                                x={xScale(maxGammaPrice)}
+                                                                y={getGammaY(maxGammaVal) - 18}
+                                                                fill="#a855f7"
+                                                                fontSize={9}
+                                                                textAnchor="middle"
+                                                            >
+                                                                ${maxGammaPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                             </text>
                                                         </g>
                                                     )}
@@ -681,13 +691,22 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                                             />
                                                             <text
                                                                 x={xScale(minGammaPrice)}
-                                                                y={getGammaY(minGammaVal) + 12}
+                                                                y={getGammaY(minGammaVal) + 14}
                                                                 fill="#a855f7"
                                                                 fontSize={9}
                                                                 textAnchor="middle"
                                                                 fontWeight="bold"
                                                             >
                                                                 Min Γ
+                                                            </text>
+                                                            <text
+                                                                x={xScale(minGammaPrice)}
+                                                                y={getGammaY(minGammaVal) + 24}
+                                                                fill="#a855f7"
+                                                                fontSize={9}
+                                                                textAnchor="middle"
+                                                            >
+                                                                ${minGammaPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                             </text>
                                                         </g>
                                                     )}
@@ -696,6 +715,52 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                         </g>
                                     );
                                 })}
+
+                                {/* Intersection Markers (Only if 2+ sources) */}
+                                {perSourceData.length >= 2 && visibleCurves.gamma && (() => {
+                                    const s1 = perSourceData[0];
+                                    const s2 = perSourceData[1];
+                                    const intersections = [];
+
+                                    for (let i = 0; i < s1.gamma.length - 1; i++) {
+                                        const v1 = s1.gamma[i].value;
+                                        const v2 = s2.gamma[i].value;
+                                        const diff = v1 - v2;
+
+                                        const v1_next = s1.gamma[i + 1].value;
+                                        const v2_next = s2.gamma[i + 1].value;
+                                        const diff_next = v1_next - v2_next;
+
+                                        if (Math.sign(diff) !== Math.sign(diff_next)) {
+                                            const fraction = Math.abs(diff) / (Math.abs(diff) + Math.abs(diff_next));
+                                            const crossPrice = s1.gamma[i].price + (s1.gamma[i + 1].price - s1.gamma[i].price) * fraction;
+                                            const crossVal = v1 + (v1_next - v1) * fraction;
+                                            intersections.push({ x: crossPrice, y: crossVal });
+                                        }
+                                    }
+
+                                    return intersections.map((pt, i) => (
+                                        <g key={`cross-${i}`}>
+                                            <circle
+                                                cx={xScale(pt.x)}
+                                                cy={getGammaY(pt.y)}
+                                                r={3}
+                                                fill="white"
+                                                stroke="#a855f7"
+                                                strokeWidth={1.5}
+                                            />
+                                            <text
+                                                x={xScale(pt.x)}
+                                                y={getGammaY(pt.y) - 8}
+                                                fill="white"
+                                                fontSize={9}
+                                                textAnchor="middle"
+                                            >
+                                                ${pt.x.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                            </text>
+                                        </g>
+                                    ));
+                                })()}
                             </g>
 
                             {/* Crosshair */}
