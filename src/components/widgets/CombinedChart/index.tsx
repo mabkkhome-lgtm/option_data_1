@@ -56,6 +56,15 @@ const sourceColors = [
     { solid: '#a855f7', dashed: '#8b5cf6' }, // Purple / Violet
 ];
 
+// Smart color picker based on label content
+const getSourceColor = (label: string, index: number) => {
+    const l = label.toLowerCase();
+    if (l.includes('long') || l.includes('buy')) return { solid: '#22c55e', dashed: '#4ade80' }; // Green for Buyers
+    if (l.includes('short') || l.includes('sell')) return { solid: '#ef4444', dashed: '#f87171' }; // Red for Sellers
+    // Fallback
+    return sourceColors[index % sourceColors.length];
+};
+
 // Tooltip styles
 const tooltipStyles = {
     ...defaultStyles,
@@ -130,16 +139,13 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         const updateDimensions = () => {
             if (!containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
-            // Allow small sizes, but prefer > 0
             if (rect.width > 0 && rect.height > 0) {
                 setDimensions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
             }
         };
 
-        // Initial update
         updateDimensions();
 
-        // Use ResizeObserver for robust updates
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
@@ -154,6 +160,23 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             resizeObserver.disconnect();
             window.removeEventListener('resize', updateDimensions);
         };
+    }, []);
+
+    // Zoom Handler (Non-passive for prevention)
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+            setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+        };
+
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
     }, []);
 
     const hasData = connectedSources.length > 0 && connectedSources.some(s => s.trades.length > 0);
@@ -175,7 +198,8 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         const r = 0.05;
 
         return connectedSources.map((source, idx) => {
-            const colorScheme = sourceColors[idx % sourceColors.length];
+            // Determines color based on label (Longs=Green, Shorts=Red)
+            const colorScheme = getSourceColor(source.label, idx);
 
             const payoffExpiry: DataPoint[] = [];
             const payoffNow: DataPoint[] = [];
@@ -205,8 +229,11 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
                     // Greeks
                     const greeks = calculateGreeks(price, strike, T, r, iv, type);
+
+                    // IMPORTANT: Greeks must be multiplied by direction!
+                    // Long = +Gamma, Short = -Gamma
                     totalDelta += greeks.delta * direction * size;
-                    totalGamma += greeks.gamma * size;
+                    totalGamma += greeks.gamma * direction * size;
 
                     // Payoff now (simplified)
                     const bsApprox = greeks.delta * (price - strike) * 0.5 + premium;
@@ -324,7 +351,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
     // Helper to map Greek values to Y-axis
     const getDeltaY = useCallback((val: number) => {
-        // Map relative to center of view (0 line)
         return yScale(val * (baseBounds.deltaScale ?? 1));
     }, [yScale, baseBounds]);
 
@@ -430,14 +456,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         setCrosshairPos(null);
     }, [hideTooltip]);
 
-    const handleWheel = useCallback((event: React.WheelEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
-        setZoomX(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
-        setZoomY(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
-    }, []);
-
     const resetView = useCallback(() => {
         setZoomX(1);
         setZoomY(1);
@@ -484,10 +502,11 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                 {/* Source legends */}
                 <div className="flex items-center gap-1">
                     {connectedSources.map((source, idx) => {
-                        const colors = sourceColors[idx % sourceColors.length];
+                        const colors = getSourceColor(source.label, idx);
+                        const baseColor = source.color || colors.solid;
                         return (
                             <div key={source.sourceId} className="flex items-center gap-1 text-[9px]">
-                                <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: source.color || colors.solid }} />
+                                <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: baseColor }} />
                                 <span className="text-gray-400">{source.label}</span>
                             </div>
                         );
@@ -523,10 +542,9 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             {/* Chart - takes remaining space */}
             <div
                 ref={containerRef}
-                className="flex-1 min-h-0 w-full"
+                className="flex-1 min-h-0 w-full relative"
                 style={{
                     touchAction: 'none',
-                    position: 'relative',
                     overflow: 'hidden',
                     cursor: getCursor()
                 }}
@@ -540,7 +558,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseLeave}
-                        onWheel={handleWheel}
                     >
                         <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
@@ -564,7 +581,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             {/* Curves per source */}
                             <g clipPath={`url(#clip-${widgetId})`}>
                                 {perSourceData.map((source, idx) => {
-                                    const colors = sourceColors[idx % sourceColors.length];
+                                    const colors = getSourceColor(source.label, idx);
                                     const baseColor = source.color || colors.solid;
 
                                     return (
