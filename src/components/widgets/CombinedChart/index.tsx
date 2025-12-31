@@ -65,6 +65,7 @@ const tooltipStyles = {
     fontSize: '11px',
     padding: '8px 12px',
     borderRadius: '8px',
+    zIndex: 100,
 };
 
 type DragMode = 'none' | 'pan' | 'xAxis' | 'yAxis';
@@ -122,13 +123,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             .filter((s): s is TradeSource => s !== undefined && s.trades.length > 0);
     }, [sourcesMap, connections, allTrades, widgetId]);
 
-    // Responsive sizing - use full container
+    // Responsive sizing - FORCE resize updates
     useEffect(() => {
         if (!containerRef.current) return;
 
         const updateDimensions = () => {
             if (!containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
+            // Allow small sizes, but prefer > 0
             if (rect.width > 0 && rect.height > 0) {
                 setDimensions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
             }
@@ -137,10 +139,14 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         // Initial update
         updateDimensions();
 
-        // Use ResizeObserver
-        const resizeObserver = new ResizeObserver(() => {
-            requestAnimationFrame(updateDimensions);
+        // Use ResizeObserver for robust updates
+        const resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setDimensions({ width: Math.floor(width), height: Math.floor(height) });
+            }
         });
+
         resizeObserver.observe(containerRef.current);
         window.addEventListener('resize', updateDimensions);
 
@@ -158,10 +164,10 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
     // Generate price range
     const prices = useMemo(() => {
-        return generatePriceRange(livePrice, 0.25, 100);
+        return generatePriceRange(livePrice, 0.3, 100);
     }, [livePrice]);
 
-    // Calculate data PER SOURCE - this is the key fix!
+    // Calculate data PER SOURCE
     const perSourceData = useMemo((): SourceChartData[] => {
         if (!hasData) return [];
 
@@ -228,26 +234,62 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     // Calculate bounds from ALL sources
     const baseBounds = useMemo(() => {
         if (perSourceData.length === 0) {
-            return { minX: prices[0], maxX: prices[prices.length - 1], minY: -10000, maxY: 10000 };
+            return {
+                minX: prices[0],
+                maxX: prices[prices.length - 1],
+                minY: -10000,
+                maxY: 10000,
+                deltaScale: 1,
+                gammaScale: 1,
+                minDelta: 0,
+                minGamma: 0
+            };
         }
 
         let minY = 0, maxY = 0;
+        let minDelta = 0, maxDelta = 0;
+        let minGamma = 0, maxGamma = 0;
+
         for (const source of perSourceData) {
-            const allValues = [
+            // Payoff bounds
+            const payoffs = [
                 ...source.payoffExpiry.map(d => d.value),
                 ...source.payoffNow.map(d => d.value),
             ];
-            minY = Math.min(minY, ...allValues);
-            maxY = Math.max(maxY, ...allValues);
+            minY = Math.min(minY, ...payoffs);
+            maxY = Math.max(maxY, ...payoffs);
+
+            // Delta bounds
+            const deltas = source.delta.map(d => d.value);
+            minDelta = Math.min(minDelta, ...deltas);
+            maxDelta = Math.max(maxDelta, ...deltas);
+
+            // Gamma bounds
+            const gammas = source.gamma.map(d => d.value);
+            minGamma = Math.min(minGamma, ...gammas);
+            maxGamma = Math.max(maxGamma, ...gammas);
         }
 
         const yPadding = Math.max(Math.abs(maxY - minY) * 0.15, 500);
+        const yRange = (maxY + yPadding) - (minY - yPadding) || 1000;
+
+        // Calculate scaling factors to map Greeks to approx 60% of chart height
+        const deltaRange = maxDelta - minDelta || 1;
+        const gammaRange = maxGamma - minGamma || 1;
+
+        // Center Greeks around 0 if possible, or just fit them
+        const deltaScale = (yRange * 0.6) / deltaRange;
+        const gammaScale = (yRange * 0.6) / gammaRange;
 
         return {
             minX: prices[0],
             maxX: prices[prices.length - 1],
             minY: minY - yPadding,
             maxY: maxY + yPadding,
+            deltaScale,
+            gammaScale,
+            minDelta,
+            minGamma
         };
     }, [prices, perSourceData]);
 
@@ -279,6 +321,16 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
 
     // Bisector for tooltip
     const bisectPrice = bisector<DataPoint, number>(d => d.price).left;
+
+    // Helper to map Greek values to Y-axis
+    const getDeltaY = useCallback((val: number) => {
+        // Map relative to center of view (0 line)
+        return yScale(val * (baseBounds.deltaScale ?? 1));
+    }, [yScale, baseBounds]);
+
+    const getGammaY = useCallback((val: number) => {
+        return yScale(val * (baseBounds.gammaScale ?? 1));
+    }, [yScale, baseBounds]);
 
     // Determine mouse zone
     const getMouseZone = useCallback((mouseX: number, mouseY: number): DragMode => {
@@ -471,14 +523,19 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             {/* Chart - takes remaining space */}
             <div
                 ref={containerRef}
-                className="flex-1 nodrag nowheel nopan"
-                style={{ touchAction: 'none', position: 'relative', overflow: 'hidden', minHeight: 0 }}
+                className="flex-1 min-h-0 w-full"
+                style={{
+                    touchAction: 'none',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    cursor: getCursor()
+                }}
             >
                 {innerWidth > 0 && innerHeight > 0 && perSourceData.length > 0 && (
                     <svg
                         width={dimensions.width}
                         height={dimensions.height}
-                        style={{ cursor: getCursor(), touchAction: 'none', display: 'block' }}
+                        style={{ display: 'block' }}
                         onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
@@ -504,7 +561,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             {/* Current price line */}
                             <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.6)" strokeWidth={1} strokeDasharray="4,4" />
 
-                            {/* Curves per source - KEY FIX: each source gets its own curves */}
+                            {/* Curves per source */}
                             <g clipPath={`url(#clip-${widgetId})`}>
                                 {perSourceData.map((source, idx) => {
                                     const colors = sourceColors[idx % sourceColors.length];
@@ -536,28 +593,28 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                                                     opacity={0.7}
                                                 />
                                             )}
-                                            {/* Delta */}
+                                            {/* Delta - GREEN, Scaled */}
                                             {visibleCurves.delta && (
                                                 <LinePath
                                                     data={source.delta}
                                                     x={d => xScale(d.price)}
-                                                    y={d => yScale(d.value * (baseBounds.maxY - baseBounds.minY) / 4)}
+                                                    y={d => getDeltaY(d.value)}
                                                     stroke="#22c55e"
                                                     strokeWidth={1.5}
                                                     curve={curveMonotoneX}
-                                                    opacity={0.6}
+                                                    opacity={0.8}
                                                 />
                                             )}
-                                            {/* Gamma */}
+                                            {/* Gamma - PURPLE, Scaled */}
                                             {visibleCurves.gamma && (
                                                 <LinePath
                                                     data={source.gamma}
                                                     x={d => xScale(d.price)}
-                                                    y={d => yScale(d.value * (baseBounds.maxY - baseBounds.minY) / 4)}
+                                                    y={d => getGammaY(d.value)}
                                                     stroke="#a855f7"
                                                     strokeWidth={1.5}
                                                     curve={curveMonotoneX}
-                                                    opacity={0.6}
+                                                    opacity={0.8}
                                                 />
                                             )}
                                         </g>
@@ -612,18 +669,32 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
                             </div>
                             {tooltipData.sources.map((src, i) => (
                                 <div key={i} className="border-t border-gray-700 pt-1">
-                                    <div className="flex items-center gap-1 text-[10px]">
+                                    <div className="flex items-center gap-1 text-[10px] mb-0.5">
                                         <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: src.color }} />
-                                        <span className="text-gray-400">{src.label}</span>
+                                        <span className="text-gray-400 font-bold">{src.label}</span>
                                     </div>
                                     {visibleCurves.payoffExpiry && (
-                                        <div className="text-[10px]" style={{ color: src.color }}>
-                                            P(exp): {src.payoffExpiry >= 0 ? '+' : ''}${src.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                        <div className="text-[10px] flex justify-between gap-4" style={{ color: src.color }}>
+                                            <span>Payoff (Exp):</span>
+                                            <span>{src.payoffExpiry >= 0 ? '+' : ''}${src.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                         </div>
                                     )}
                                     {visibleCurves.payoffNow && (
-                                        <div className="text-[10px] opacity-70" style={{ color: src.color }}>
-                                            P(now): {src.payoffNow >= 0 ? '+' : ''}${src.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                        <div className="text-[10px] flex justify-between gap-4 opacity-80" style={{ color: src.color }}>
+                                            <span>Payoff (Now):</span>
+                                            <span>{src.payoffNow >= 0 ? '+' : ''}${src.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                        </div>
+                                    )}
+                                    {visibleCurves.delta && (
+                                        <div className="text-[10px] flex justify-between gap-4 text-green-400">
+                                            <span>Delta:</span>
+                                            <span>{src.delta.toFixed(4)}</span>
+                                        </div>
+                                    )}
+                                    {visibleCurves.gamma && (
+                                        <div className="text-[10px] flex justify-between gap-4 text-purple-400">
+                                            <span>Gamma:</span>
+                                            <span>{src.gamma.toFixed(6)}</span>
                                         </div>
                                     )}
                                 </div>
