@@ -25,7 +25,10 @@ interface DataPoint {
     value: number;
 }
 
-interface ChartDataSet {
+interface SourceChartData {
+    sourceId: string;
+    label: string;
+    color: string;
     payoffExpiry: DataPoint[];
     payoffNow: DataPoint[];
     delta: DataPoint[];
@@ -34,19 +37,24 @@ interface ChartDataSet {
 
 interface TooltipData {
     price: number;
-    payoffExpiry: number;
-    payoffNow: number;
-    delta: number;
-    gamma: number;
+    sources: {
+        label: string;
+        color: string;
+        payoffExpiry: number;
+        payoffNow: number;
+        delta: number;
+        gamma: number;
+    }[];
 }
 
-// Curve colors matching Thales style
-const curveColors = {
-    payoffExpiry: '#ef4444',  // Red - P at expiry
-    payoffNow: '#f97316',     // Orange - P now  
-    delta: '#22c55e',         // Green - Delta
-    gamma: '#a855f7',         // Purple - Gamma
-};
+// Default source colors (cycle through these)
+const sourceColors = [
+    { solid: '#ef4444', dashed: '#f97316' }, // Red / Orange
+    { solid: '#eab308', dashed: '#fbbf24' }, // Yellow / Amber
+    { solid: '#22c55e', dashed: '#10b981' }, // Green / Emerald
+    { solid: '#06b6d4', dashed: '#0ea5e9' }, // Cyan / Sky
+    { solid: '#a855f7', dashed: '#8b5cf6' }, // Purple / Violet
+];
 
 // Tooltip styles
 const tooltipStyles = {
@@ -68,8 +76,8 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const [visibleCurves, setVisibleCurves] = useState({
         payoffExpiry: true,
         payoffNow: true,
-        delta: true,
-        gamma: true,
+        delta: false,
+        gamma: false,
     });
     const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number; price: number } | null>(null);
 
@@ -82,7 +90,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const [hoverZone, setHoverZone] = useState<DragMode>('none');
     const [dragStart, setDragStart] = useState({ x: 0, y: 0, zoomX: 1, zoomY: 1, panX: 0, panY: 0 });
 
-    // Use correct store properties
+    // Store
     const { btcPrice, isConnected } = useLivePriceStore();
     const sourcesMap = useTradesSelectionStore(state => state.sources);
     const connections = useTradesSelectionStore(state => state.connections);
@@ -91,18 +99,17 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
     const { showTooltip, hideTooltip, tooltipData, tooltipLeft, tooltipTop, tooltipOpen } =
         useTooltip<TooltipData>();
 
-    // Get connected sources - FIXED: properly handle multiple connections
+    // Get connected sources
     const connectedSources = useMemo(() => {
         const connectedIds = connections
             .filter(c => c.targetId === widgetId)
             .map(c => c.sourceId);
 
         if (connectedIds.length === 0) {
-            // Fallback to all trades if no connections
             if (allTrades.length > 0) {
                 return [{
                     sourceId: 'default',
-                    label: 'All Trades',
+                    label: 'All',
                     trades: allTrades,
                     color: '#8b5cf6'
                 }] as TradeSource[];
@@ -110,13 +117,12 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             return [];
         }
 
-        // Get all connected sources
         return connectedIds
             .map(id => sourcesMap.get(id))
             .filter((s): s is TradeSource => s !== undefined && s.trades.length > 0);
     }, [sourcesMap, connections, allTrades, widgetId]);
 
-    // Responsive sizing with ResizeObserver
+    // Responsive sizing - use full container
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -124,167 +130,126 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             if (!containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) {
-                setDimensions({ width: rect.width, height: rect.height });
+                setDimensions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
             }
         };
 
+        // Initial update
         updateDimensions();
 
-        let rafId: number | null = null;
+        // Use ResizeObserver
         const resizeObserver = new ResizeObserver(() => {
-            if (rafId) cancelAnimationFrame(rafId);
-            rafId = requestAnimationFrame(updateDimensions);
+            requestAnimationFrame(updateDimensions);
         });
-
         resizeObserver.observe(containerRef.current);
         window.addEventListener('resize', updateDimensions);
 
         return () => {
             resizeObserver.disconnect();
             window.removeEventListener('resize', updateDimensions);
-            if (rafId) cancelAnimationFrame(rafId);
         };
     }, []);
 
-    // Get ALL trades from ALL connected sources - FIXED: aggregate properly
-    const trades = useMemo(() => {
-        return connectedSources.flatMap((source: TradeSource) => source.trades);
-    }, [connectedSources]);
-
-    const hasData = trades.length > 0;
+    const hasData = connectedSources.length > 0 && connectedSources.some(s => s.trades.length > 0);
     const livePrice = btcPrice || 95000;
-    const margin = { top: 20, right: 20, bottom: 50, left: 65 };
+    const margin = { top: 10, right: 15, bottom: 40, left: 55 };
     const innerWidth = Math.max(0, dimensions.width - margin.left - margin.right);
     const innerHeight = Math.max(0, dimensions.height - margin.top - margin.bottom);
 
-    // Generate price range centered on live price
+    // Generate price range
     const prices = useMemo(() => {
-        return generatePriceRange(livePrice, 0.30, 150);
+        return generatePriceRange(livePrice, 0.25, 100);
     }, [livePrice]);
 
-    // Calculate RAW data points - FIXED: aggregate from ALL trades
-    const rawData = useMemo((): ChartDataSet | null => {
-        if (!hasData) return null;
-
-        const payoffExpiry: DataPoint[] = [];
-        const payoffNow: DataPoint[] = [];
-        const delta: DataPoint[] = [];
-        const gamma: DataPoint[] = [];
+    // Calculate data PER SOURCE - this is the key fix!
+    const perSourceData = useMemo((): SourceChartData[] => {
+        if (!hasData) return [];
 
         const T = Math.max(0.001, daysToExpiry / 365);
         const r = 0.05;
 
-        for (const price of prices) {
-            let totalPayoffExpiry = 0;
-            let totalDelta = 0;
-            let totalGamma = 0;
-            let totalPayoffNow = 0;
+        return connectedSources.map((source, idx) => {
+            const colorScheme = sourceColors[idx % sourceColors.length];
 
-            // Sum across ALL trades from ALL connected sources
-            for (const trade of trades) {
-                const strike = trade.strike;
-                const type = trade.type as 'call' | 'put';
-                const direction = trade.direction === 'buy' ? 1 : -1;
-                const size = trade.size || 1;
-                const premium = trade.priceUSD || 0;
-                const iv = trade.iv ? trade.iv / 100 : 0.5;
+            const payoffExpiry: DataPoint[] = [];
+            const payoffNow: DataPoint[] = [];
+            const delta: DataPoint[] = [];
+            const gamma: DataPoint[] = [];
 
-                // Payoff at expiry
-                const intrinsic = type === 'call'
-                    ? Math.max(0, price - strike)
-                    : Math.max(0, strike - price);
-                totalPayoffExpiry += (intrinsic - premium) * direction * size;
+            for (const price of prices) {
+                let totalPayoffExpiry = 0;
+                let totalDelta = 0;
+                let totalGamma = 0;
+                let totalPayoffNow = 0;
 
-                // Greeks
-                const greeks = calculateGreeks(price, strike, T, r, iv, type);
-                totalDelta += greeks.delta * direction * size;
-                totalGamma += greeks.gamma * size;
+                // Only sum trades from THIS source
+                for (const trade of source.trades) {
+                    const strike = trade.strike;
+                    const type = trade.type as 'call' | 'put';
+                    const direction = trade.direction === 'buy' ? 1 : -1;
+                    const size = trade.size || 1;
+                    const premium = trade.priceUSD || 0;
+                    const iv = trade.iv ? trade.iv / 100 : 0.5;
 
-                // Payoff now
-                const bsApprox = greeks.delta * (price - strike) * 0.5 + premium;
-                totalPayoffNow += (Math.max(0, bsApprox) - premium) * direction * size;
+                    // Payoff at expiry
+                    const intrinsic = type === 'call'
+                        ? Math.max(0, price - strike)
+                        : Math.max(0, strike - price);
+                    totalPayoffExpiry += (intrinsic - premium) * direction * size;
+
+                    // Greeks
+                    const greeks = calculateGreeks(price, strike, T, r, iv, type);
+                    totalDelta += greeks.delta * direction * size;
+                    totalGamma += greeks.gamma * size;
+
+                    // Payoff now (simplified)
+                    const bsApprox = greeks.delta * (price - strike) * 0.5 + premium;
+                    totalPayoffNow += (Math.max(0, bsApprox) - premium) * direction * size;
+                }
+
+                payoffExpiry.push({ price, value: totalPayoffExpiry });
+                payoffNow.push({ price, value: totalPayoffNow });
+                delta.push({ price, value: totalDelta });
+                gamma.push({ price, value: totalGamma });
             }
 
-            payoffExpiry.push({ price, value: totalPayoffExpiry });
-            payoffNow.push({ price, value: totalPayoffNow });
-            delta.push({ price, value: totalDelta });
-            gamma.push({ price, value: totalGamma });
-        }
+            return {
+                sourceId: source.sourceId,
+                label: source.label,
+                color: source.color || colorScheme.solid,
+                payoffExpiry,
+                payoffNow,
+                delta,
+                gamma,
+            };
+        });
+    }, [hasData, connectedSources, prices, daysToExpiry]);
 
-        return { payoffExpiry, payoffNow, delta, gamma };
-    }, [hasData, trades, prices, daysToExpiry]);
-
-    // Calculate bounds
-    const curveScales = useMemo(() => {
-        if (!rawData) return null;
-
-        const payoffValues = [
-            ...rawData.payoffExpiry.map(d => d.value),
-            ...rawData.payoffNow.map(d => d.value)
-        ];
-        const payoffMin = Math.min(...payoffValues);
-        const payoffMax = Math.max(...payoffValues);
-        const payoffPadding = Math.max(Math.abs(payoffMax - payoffMin) * 0.15, 100);
-
-        const deltaValues = rawData.delta.map(d => d.value);
-        const deltaMin = Math.min(...deltaValues);
-        const deltaMax = Math.max(...deltaValues);
-        const deltaRange = deltaMax - deltaMin || 1;
-
-        const gammaValues = rawData.gamma.map(d => d.value);
-        const gammaMin = Math.min(...gammaValues);
-        const gammaMax = Math.max(...gammaValues);
-        const gammaRange = gammaMax - gammaMin || 1;
-
-        const payoffRange = (payoffMax - payoffMin) || 1;
-        const greekScale = payoffRange * 0.4;
-
-        return {
-            minY: payoffMin - payoffPadding,
-            maxY: payoffMax + payoffPadding,
-            delta: { min: deltaMin, range: deltaRange, scale: greekScale / deltaRange },
-            gamma: { min: gammaMin, range: gammaRange, scale: greekScale / gammaRange },
-        };
-    }, [rawData]);
-
-    // Scale Greeks to fit
-    const scaledData = useMemo(() => {
-        if (!rawData || !curveScales) return null;
-
-        const scaledDelta = rawData.delta.map(d => ({
-            price: d.price,
-            value: (d.value - curveScales.delta.min) * curveScales.delta.scale - curveScales.delta.scale * curveScales.delta.range * 0.5,
-        }));
-
-        const scaledGamma = rawData.gamma.map(d => ({
-            price: d.price,
-            value: (d.value - curveScales.gamma.min) * curveScales.gamma.scale - curveScales.gamma.scale * curveScales.gamma.range * 0.5,
-        }));
-
-        return {
-            payoffExpiry: rawData.payoffExpiry,
-            payoffNow: rawData.payoffNow,
-            delta: scaledDelta,
-            gamma: scaledGamma,
-        };
-    }, [rawData, curveScales]);
-
-    // Base chart bounds - CENTERED on zero for break-even visibility
+    // Calculate bounds from ALL sources
     const baseBounds = useMemo(() => {
-        if (!curveScales) {
+        if (perSourceData.length === 0) {
             return { minX: prices[0], maxX: prices[prices.length - 1], minY: -10000, maxY: 10000 };
         }
-        // Ensure zero is visible and centered if possible
-        const yRange = curveScales.maxY - curveScales.minY;
-        const yCenter = (curveScales.maxY + curveScales.minY) / 2;
+
+        let minY = 0, maxY = 0;
+        for (const source of perSourceData) {
+            const allValues = [
+                ...source.payoffExpiry.map(d => d.value),
+                ...source.payoffNow.map(d => d.value),
+            ];
+            minY = Math.min(minY, ...allValues);
+            maxY = Math.max(maxY, ...allValues);
+        }
+
+        const yPadding = Math.max(Math.abs(maxY - minY) * 0.15, 500);
 
         return {
             minX: prices[0],
             maxX: prices[prices.length - 1],
-            minY: curveScales.minY,
-            maxY: curveScales.maxY,
+            minY: minY - yPadding,
+            maxY: maxY + yPadding,
         };
-    }, [prices, curveScales]);
+    }, [prices, perSourceData]);
 
     // Apply zoom and pan
     const visibleBounds = useMemo(() => {
@@ -329,7 +294,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         return 'none';
     }, [innerWidth, innerHeight, margin]);
 
-    // Handle mouse down
     const handleMouseDown = useCallback((event: React.MouseEvent) => {
         const point = localPoint(event);
         if (!point) return;
@@ -344,7 +308,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         }
     }, [margin, getMouseZone, zoomX, zoomY, panX, panY]);
 
-    // Handle mouse move
     const handleMouseMove = useCallback((event: React.MouseEvent) => {
         const point = localPoint(event);
         if (point) {
@@ -367,7 +330,7 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             const yRange = (baseBounds.maxY - baseBounds.minY) / zoomY;
             setPanX(dragStart.panX - (dx / innerWidth) * xRange);
             setPanY(dragStart.panY + (dy / innerHeight) * yRange);
-        } else if (rawData && point) {
+        } else if (perSourceData.length > 0 && point) {
             // Show tooltip
             const mouseX = point.x - margin.left;
             const mouseY = point.y - margin.top;
@@ -379,26 +342,30 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
             }
 
             const price = xScale.invert(mouseX);
-            const idx = Math.min(
-                Math.max(0, bisectPrice(rawData.payoffExpiry, price, 1) - 1),
-                rawData.payoffExpiry.length - 1
-            );
-
             setCrosshairPos({ x: mouseX, y: mouseY, price });
 
+            const sources = perSourceData.map(source => {
+                const idx = Math.min(
+                    Math.max(0, bisectPrice(source.payoffExpiry, price, 1) - 1),
+                    source.payoffExpiry.length - 1
+                );
+                return {
+                    label: source.label,
+                    color: source.color,
+                    payoffExpiry: source.payoffExpiry[idx]?.value || 0,
+                    payoffNow: source.payoffNow[idx]?.value || 0,
+                    delta: source.delta[idx]?.value || 0,
+                    gamma: source.gamma[idx]?.value || 0,
+                };
+            });
+
             showTooltip({
-                tooltipData: {
-                    price,
-                    payoffExpiry: rawData.payoffExpiry[idx]?.value || 0,
-                    payoffNow: rawData.payoffNow[idx]?.value || 0,
-                    delta: rawData.delta[idx]?.value || 0,
-                    gamma: rawData.gamma[idx]?.value || 0,
-                },
+                tooltipData: { price, sources },
                 tooltipLeft: point.x,
                 tooltipTop: point.y,
             });
         }
-    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, rawData, xScale, margin, bisectPrice, showTooltip, hideTooltip, getMouseZone]);
+    }, [dragMode, dragStart, baseBounds, zoomX, zoomY, innerWidth, innerHeight, perSourceData, xScale, margin, bisectPrice, showTooltip, hideTooltip, getMouseZone]);
 
     const handleMouseUp = useCallback(() => {
         setDragMode('none');
@@ -430,7 +397,6 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         setVisibleCurves(prev => ({ ...prev, [curve]: !prev[curve] }));
     };
 
-    // Get cursor
     const getCursor = () => {
         if (dragMode === 'xAxis' || hoverZone === 'xAxis') return 'ew-resize';
         if (dragMode === 'yAxis' || hoverZone === 'yAxis') return 'ns-resize';
@@ -439,214 +405,236 @@ export const CombinedChartWidget = memo(function CombinedChartWidget({ widgetId 
         return 'default';
     };
 
+    const totalTrades = connectedSources.reduce((sum, s) => sum + s.trades.length, 0);
+
     if (!hasData) {
         return (
             <div className="h-full flex flex-col items-center justify-center text-foreground-muted bg-transparent p-4">
                 <Activity size={32} className="mb-2 opacity-50" />
-                <p className="text-sm">Connect trades from a Market Screener</p>
-                <p className="text-xs opacity-60 mt-1">Use the socket handle on the left</p>
+                <p className="text-sm">Connect trades from Market Screeners</p>
+                <p className="text-xs opacity-60 mt-1">Drag from output socket to input socket</p>
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-transparent">
-            {/* Header with curve toggles */}
-            <div className="px-3 py-2 border-b border-[rgba(48,54,61,0.5)] flex items-center gap-2 bg-[rgba(255,255,255,0.02)]">
-                {/* Curve toggles */}
-                <div className="flex flex-col gap-0.5">
-                    {Object.entries(curveColors).map(([key, color]) => (
-                        <button
-                            key={key}
-                            onClick={() => toggleCurve(key as keyof typeof visibleCurves)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition-opacity ${visibleCurves[key as keyof typeof visibleCurves] ? 'opacity-100' : 'opacity-30'
-                                }`}
-                            style={{ color }}
-                        >
-                            {key === 'payoffExpiry' ? 'P' : key === 'payoffNow' ? 'P' : key === 'delta' ? 'D' : 'G'}
-                        </button>
-                    ))}
+        <div className="h-full flex flex-col bg-transparent overflow-hidden">
+            {/* Compact Header */}
+            <div className="shrink-0 px-2 py-1 border-b border-[rgba(48,54,61,0.5)] flex items-center gap-2 bg-[rgba(255,255,255,0.02)]">
+                {/* Curve toggles - inline */}
+                <div className="flex items-center gap-0.5">
+                    <button onClick={() => toggleCurve('payoffExpiry')} className={`text-[9px] px-1 py-0.5 rounded font-bold ${visibleCurves.payoffExpiry ? 'opacity-100 bg-red-500/20' : 'opacity-30'}`} style={{ color: '#ef4444' }}>P</button>
+                    <button onClick={() => toggleCurve('payoffNow')} className={`text-[9px] px-1 py-0.5 rounded font-bold ${visibleCurves.payoffNow ? 'opacity-100 bg-orange-500/20' : 'opacity-30'}`} style={{ color: '#f97316' }}>P</button>
+                    <button onClick={() => toggleCurve('delta')} className={`text-[9px] px-1 py-0.5 rounded font-bold ${visibleCurves.delta ? 'opacity-100 bg-green-500/20' : 'opacity-30'}`} style={{ color: '#22c55e' }}>Δ</button>
+                    <button onClick={() => toggleCurve('gamma')} className={`text-[9px] px-1 py-0.5 rounded font-bold ${visibleCurves.gamma ? 'opacity-100 bg-purple-500/20' : 'opacity-30'}`} style={{ color: '#a855f7' }}>Γ</button>
+                </div>
+
+                {/* Source legends */}
+                <div className="flex items-center gap-1">
+                    {connectedSources.map((source, idx) => {
+                        const colors = sourceColors[idx % sourceColors.length];
+                        return (
+                            <div key={source.sourceId} className="flex items-center gap-1 text-[9px]">
+                                <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: source.color || colors.solid }} />
+                                <span className="text-gray-400">{source.label}</span>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div className="flex-1" />
 
-                {/* Connection info */}
-                {connectedSources.length > 0 && (
-                    <div className="text-[9px] text-gray-500">
-                        {trades.length} trades from {connectedSources.length} source{connectedSources.length > 1 ? 's' : ''}
-                    </div>
-                )}
+                <div className="text-[8px] text-gray-500">{totalTrades} trades / {connectedSources.length} src</div>
 
-                {/* Live price */}
-                <div className="flex items-center gap-2 bg-black/30 px-2 py-1 rounded-lg">
-                    <Zap size={12} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
-                    <span className="text-xs text-gray-400">BTC</span>
-                    <span className="text-sm font-mono font-bold text-white">${livePrice.toLocaleString()}</span>
+                <div className="flex items-center gap-1 bg-black/30 px-1.5 py-0.5 rounded">
+                    <Zap size={10} className={isConnected ? 'text-green-400' : 'text-gray-500'} />
+                    <span className="text-[10px] font-mono text-white">${livePrice.toLocaleString()}</span>
                 </div>
 
-                {/* Days to expiry */}
-                <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-gray-500">DTE:</span>
+                <div className="flex items-center gap-1">
                     <input
                         type="number"
                         value={daysToExpiry}
                         onChange={(e) => setDaysToExpiry(Math.max(1, Math.min(365, Number(e.target.value))))}
-                        className="w-12 bg-black/30 text-white px-1.5 py-0.5 rounded border border-cyan-500/30 text-center"
+                        className="w-8 bg-black/30 text-white text-[10px] px-1 py-0.5 rounded border border-cyan-500/30 text-center"
                         min="1"
                         max="365"
                     />
+                    <span className="text-[8px] text-gray-500">DTE</span>
                 </div>
 
-                {/* Reset button */}
-                <button
-                    onClick={resetView}
-                    className="p-1.5 bg-black/30 hover:bg-black/50 rounded text-gray-400 hover:text-white transition-colors"
-                    title="Reset View"
-                >
-                    <RotateCcw size={14} />
+                <button onClick={resetView} className="p-1 bg-black/30 hover:bg-black/50 rounded text-gray-400 hover:text-white">
+                    <RotateCcw size={12} />
                 </button>
             </div>
 
-            {/* Chart */}
+            {/* Chart - takes remaining space */}
             <div
                 ref={containerRef}
-                className="flex-1 min-h-0 nodrag nowheel nopan"
-                style={{ touchAction: 'none', position: 'relative', overflow: 'hidden' }}
+                className="flex-1 nodrag nowheel nopan"
+                style={{ touchAction: 'none', position: 'relative', overflow: 'hidden', minHeight: 0 }}
             >
-                {innerWidth > 0 && innerHeight > 0 && scaledData && (
-                    <>
-                        <svg
-                            width={dimensions.width}
-                            height={dimensions.height}
-                            style={{ cursor: getCursor(), touchAction: 'none' }}
-                            onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={handleMouseUp}
-                            onMouseLeave={handleMouseLeave}
-                            onWheel={handleWheel}
-                        >
-                            <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
+                {innerWidth > 0 && innerHeight > 0 && perSourceData.length > 0 && (
+                    <svg
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        style={{ cursor: getCursor(), touchAction: 'none', display: 'block' }}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseLeave}
+                        onWheel={handleWheel}
+                    >
+                        <rect width={dimensions.width} height={dimensions.height} fill="transparent" />
 
-                            <Group left={margin.left} top={margin.top}>
-                                <defs>
-                                    <clipPath id={`clip-${widgetId}`}>
-                                        <rect width={innerWidth} height={innerHeight} />
-                                    </clipPath>
-                                </defs>
+                        <Group left={margin.left} top={margin.top}>
+                            <defs>
+                                <clipPath id={`clip-${widgetId}`}>
+                                    <rect width={innerWidth} height={innerHeight} />
+                                </clipPath>
+                            </defs>
 
-                                {/* Grid */}
-                                <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
-                                <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
+                            {/* Grid */}
+                            <GridRows scale={yScale} width={innerWidth} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
+                            <GridColumns scale={xScale} height={innerHeight} stroke="rgba(72, 79, 88, 0.3)" strokeDasharray="2,2" />
 
-                                {/* Zero line - BREAK-EVEN */}
-                                <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="#58a6ff" strokeWidth={1.5} />
+                            {/* Zero line - BREAK-EVEN */}
+                            <line x1={0} x2={innerWidth} y1={yScale(0)} y2={yScale(0)} stroke="#58a6ff" strokeWidth={1.5} />
 
-                                {/* Current price line */}
-                                <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.5)" strokeWidth={1} strokeDasharray="4,4" />
+                            {/* Current price line */}
+                            <line x1={xScale(livePrice)} x2={xScale(livePrice)} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.6)" strokeWidth={1} strokeDasharray="4,4" />
 
-                                {/* Curves */}
-                                <g clipPath={`url(#clip-${widgetId})`}>
-                                    {visibleCurves.payoffExpiry && (
-                                        <LinePath data={scaledData.payoffExpiry} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffExpiry} strokeWidth={2} curve={curveMonotoneX} />
-                                    )}
-                                    {visibleCurves.payoffNow && (
-                                        <LinePath data={scaledData.payoffNow} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.payoffNow} strokeWidth={2} curve={curveMonotoneX} />
-                                    )}
-                                    {visibleCurves.delta && (
-                                        <LinePath data={scaledData.delta} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.delta} strokeWidth={2} curve={curveMonotoneX} />
-                                    )}
-                                    {visibleCurves.gamma && (
-                                        <LinePath data={scaledData.gamma} x={d => xScale(d.price)} y={d => yScale(d.value)} stroke={curveColors.gamma} strokeWidth={2} curve={curveMonotoneX} />
-                                    )}
-                                </g>
+                            {/* Curves per source - KEY FIX: each source gets its own curves */}
+                            <g clipPath={`url(#clip-${widgetId})`}>
+                                {perSourceData.map((source, idx) => {
+                                    const colors = sourceColors[idx % sourceColors.length];
+                                    const baseColor = source.color || colors.solid;
 
-                                {/* Crosshair */}
-                                {crosshairPos && dragMode === 'none' && (
-                                    <>
-                                        <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
-                                        <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
-                                    </>
-                                )}
+                                    return (
+                                        <g key={source.sourceId}>
+                                            {/* Payoff at expiry - SOLID line */}
+                                            {visibleCurves.payoffExpiry && (
+                                                <LinePath
+                                                    data={source.payoffExpiry}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.value)}
+                                                    stroke={baseColor}
+                                                    strokeWidth={2}
+                                                    curve={curveMonotoneX}
+                                                />
+                                            )}
+                                            {/* Payoff now - DASHED line */}
+                                            {visibleCurves.payoffNow && (
+                                                <LinePath
+                                                    data={source.payoffNow}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.value)}
+                                                    stroke={baseColor}
+                                                    strokeWidth={1.5}
+                                                    strokeDasharray="4,4"
+                                                    curve={curveMonotoneX}
+                                                    opacity={0.7}
+                                                />
+                                            )}
+                                            {/* Delta */}
+                                            {visibleCurves.delta && (
+                                                <LinePath
+                                                    data={source.delta}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.value * (baseBounds.maxY - baseBounds.minY) / 4)}
+                                                    stroke="#22c55e"
+                                                    strokeWidth={1.5}
+                                                    curve={curveMonotoneX}
+                                                    opacity={0.6}
+                                                />
+                                            )}
+                                            {/* Gamma */}
+                                            {visibleCurves.gamma && (
+                                                <LinePath
+                                                    data={source.gamma}
+                                                    x={d => xScale(d.price)}
+                                                    y={d => yScale(d.value * (baseBounds.maxY - baseBounds.minY) / 4)}
+                                                    stroke="#a855f7"
+                                                    strokeWidth={1.5}
+                                                    curve={curveMonotoneX}
+                                                    opacity={0.6}
+                                                />
+                                            )}
+                                        </g>
+                                    );
+                                })}
+                            </g>
 
-                                {/* Y Axis with highlight zone */}
-                                <rect
-                                    x={-margin.left}
-                                    y={0}
-                                    width={margin.left}
-                                    height={innerHeight}
-                                    fill={hoverZone === 'yAxis' || dragMode === 'yAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
-                                    style={{ cursor: 'ns-resize' }}
-                                />
-                                <AxisLeft
-                                    scale={yScale}
-                                    tickFormat={v => {
-                                        const val = Number(v);
-                                        if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
-                                        return `$${val.toFixed(0)}`;
-                                    }}
-                                    stroke="rgba(125, 133, 144, 0.3)"
-                                    tickStroke="rgba(125, 133, 144, 0.3)"
-                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'end', dy: 4 })}
-                                    numTicks={6}
-                                />
+                            {/* Crosshair */}
+                            {crosshairPos && dragMode === 'none' && (
+                                <>
+                                    <line x1={crosshairPos.x} x2={crosshairPos.x} y1={0} y2={innerHeight} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                    <line x1={0} x2={innerWidth} y1={crosshairPos.y} y2={crosshairPos.y} stroke="rgba(255,255,255,0.4)" strokeWidth={1} strokeDasharray="4,4" />
+                                </>
+                            )}
 
-                                {/* X Axis with highlight zone */}
-                                <rect
-                                    x={0}
-                                    y={innerHeight}
-                                    width={innerWidth}
-                                    height={margin.bottom}
-                                    fill={hoverZone === 'xAxis' || dragMode === 'xAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'}
-                                    style={{ cursor: 'ew-resize' }}
-                                />
-                                <AxisBottom
-                                    scale={xScale}
-                                    top={innerHeight}
-                                    tickFormat={v => `${(Number(v) / 1000).toFixed(0)}K`}
-                                    stroke="rgba(125, 133, 144, 0.3)"
-                                    tickStroke="rgba(125, 133, 144, 0.3)"
-                                    tickLabelProps={() => ({ fill: '#7d8590', fontSize: 10, textAnchor: 'middle', dy: -4 })}
-                                    numTicks={6}
-                                />
-                            </Group>
-                        </svg>
-                    </>
+                            {/* Y Axis zone */}
+                            <rect x={-margin.left} y={0} width={margin.left} height={innerHeight} fill={hoverZone === 'yAxis' || dragMode === 'yAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'} />
+                            <AxisLeft
+                                scale={yScale}
+                                tickFormat={v => {
+                                    const val = Number(v);
+                                    if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+                                    return `$${val.toFixed(0)}`;
+                                }}
+                                stroke="rgba(125, 133, 144, 0.3)"
+                                tickStroke="rgba(125, 133, 144, 0.3)"
+                                tickLabelProps={() => ({ fill: '#7d8590', fontSize: 9, textAnchor: 'end', dy: 3 })}
+                                numTicks={5}
+                            />
+
+                            {/* X Axis zone */}
+                            <rect x={0} y={innerHeight} width={innerWidth} height={margin.bottom} fill={hoverZone === 'xAxis' || dragMode === 'xAxis' ? 'rgba(88, 166, 255, 0.1)' : 'transparent'} />
+                            <AxisBottom
+                                scale={xScale}
+                                top={innerHeight}
+                                tickFormat={v => `${(Number(v) / 1000).toFixed(0)}K`}
+                                stroke="rgba(125, 133, 144, 0.3)"
+                                tickStroke="rgba(125, 133, 144, 0.3)"
+                                tickLabelProps={() => ({ fill: '#7d8590', fontSize: 9, textAnchor: 'middle' })}
+                                numTicks={6}
+                            />
+                        </Group>
+                    </svg>
                 )}
 
                 {/* Tooltip */}
                 {tooltipOpen && tooltipData && dragMode === 'none' && (
                     <TooltipWithBounds left={tooltipLeft} top={tooltipTop} style={tooltipStyles}>
-                        <div className="font-mono space-y-0.5">
-                            <div className="text-cyan-400 font-bold">
+                        <div className="font-mono space-y-1">
+                            <div className="text-cyan-400 font-bold text-xs">
                                 ${tooltipData.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                             </div>
-                            {visibleCurves.payoffExpiry && (
-                                <div style={{ color: curveColors.payoffExpiry }}>
-                                    P(exp): {tooltipData.payoffExpiry >= 0 ? '+' : ''}${tooltipData.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            {tooltipData.sources.map((src, i) => (
+                                <div key={i} className="border-t border-gray-700 pt-1">
+                                    <div className="flex items-center gap-1 text-[10px]">
+                                        <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: src.color }} />
+                                        <span className="text-gray-400">{src.label}</span>
+                                    </div>
+                                    {visibleCurves.payoffExpiry && (
+                                        <div className="text-[10px]" style={{ color: src.color }}>
+                                            P(exp): {src.payoffExpiry >= 0 ? '+' : ''}${src.payoffExpiry.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                        </div>
+                                    )}
+                                    {visibleCurves.payoffNow && (
+                                        <div className="text-[10px] opacity-70" style={{ color: src.color }}>
+                                            P(now): {src.payoffNow >= 0 ? '+' : ''}${src.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                            {visibleCurves.payoffNow && (
-                                <div style={{ color: curveColors.payoffNow }}>
-                                    P(now): {tooltipData.payoffNow >= 0 ? '+' : ''}${tooltipData.payoffNow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </div>
-                            )}
-                            {visibleCurves.delta && (
-                                <div style={{ color: curveColors.delta }}>
-                                    Δ: {tooltipData.delta.toFixed(4)}
-                                </div>
-                            )}
-                            {visibleCurves.gamma && (
-                                <div style={{ color: curveColors.gamma }}>
-                                    Γ: {tooltipData.gamma.toFixed(6)}
-                                </div>
-                            )}
+                            ))}
                         </div>
                     </TooltipWithBounds>
                 )}
             </div>
 
-            {/* Footer */}
-            <div className="px-3 py-1.5 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[9px] text-gray-500 text-center">
+            {/* Minimal footer */}
+            <div className="shrink-0 px-2 py-1 border-t border-[rgba(48,54,61,0.3)] bg-[rgba(0,0,0,0.2)] text-[8px] text-gray-600 text-center">
                 Drag axes to scale • Drag chart to pan • Scroll to zoom
             </div>
         </div>
