@@ -1,0 +1,16 @@
+name: Market Levels Cron
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  calculate-levels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Calculation API
+        run: |
+          curl -X GET "https://app-nine-tau-91.vercel.app/api/cron/market-levels" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          --fail
