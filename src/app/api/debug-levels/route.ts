@@ -9,54 +9,31 @@ export async function GET() {
     }
 
     try {
-        // Get all market_levels records from last 7 days
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        const { data, error } = await supabase
+        // Get most recent 20 records (regardless of date)
+        const { data: recentData, error: recentError } = await supabase
             .from('market_levels')
             .select('timestamp, support_price, resistance_price, gamma_high_price, gamma_low_price')
-            .gte('timestamp', sevenDaysAgo)
-            .order('timestamp', { ascending: true });
+            .order('timestamp', { ascending: false })
+            .limit(20);
 
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
+        if (recentError) {
+            return NextResponse.json({ error: recentError.message }, { status: 500 });
         }
 
-        // Calculate stats
-        const validRecords = data?.filter(d =>
+        // Calculate which are valid
+        const validRecent = recentData?.filter(d =>
             Math.abs(d.support_price - d.resistance_price) > 100
         ) || [];
 
-        // Get min/max values to see range
-        let supportMin = Infinity, supportMax = -Infinity;
-        let resistanceMin = Infinity, resistanceMax = -Infinity;
-
-        for (const r of validRecords) {
-            if (r.support_price < supportMin) supportMin = r.support_price;
-            if (r.support_price > supportMax) supportMax = r.support_price;
-            if (r.resistance_price < resistanceMin) resistanceMin = r.resistance_price;
-            if (r.resistance_price > resistanceMax) resistanceMax = r.resistance_price;
-        }
-
         return NextResponse.json({
-            totalRecords: data?.length || 0,
-            validRecords: validRecords.length,
-            timeRange: {
-                oldest: data?.[0]?.timestamp,
-                newest: data?.[data.length - 1]?.timestamp
-            },
-            supportRange: { min: Math.round(supportMin), max: Math.round(supportMax), variation: Math.round(supportMax - supportMin) },
-            resistanceRange: { min: Math.round(resistanceMin), max: Math.round(resistanceMax), variation: Math.round(resistanceMax - resistanceMin) },
-            // Show sample of data points
-            samples: validRecords.slice(0, 10).map(r => ({
+            totalRecentRecords: recentData?.length || 0,
+            validRecentRecords: validRecent.length,
+            mostRecent: recentData?.slice(0, 10).map(r => ({
                 time: r.timestamp,
                 S: Math.round(r.support_price),
-                R: Math.round(r.resistance_price)
-            })),
-            latestSamples: validRecords.slice(-5).map(r => ({
-                time: r.timestamp,
-                S: Math.round(r.support_price),
-                R: Math.round(r.resistance_price)
+                R: Math.round(r.resistance_price),
+                diff: Math.round(Math.abs(r.support_price - r.resistance_price)),
+                valid: Math.abs(r.support_price - r.resistance_price) > 100
             }))
         });
     } catch (err) {
