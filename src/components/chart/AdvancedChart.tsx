@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, LineStyle, CrosshairMode, Time, LineData } from 'lightweight-charts';
-import { Settings, Maximize2, Minimize2, MoreVertical, Plus } from 'lucide-react';
+import { createChart, ColorType, IChartApi, ISeriesApi, LineStyle, CrosshairMode, Time, LineData, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+import { Settings, Maximize2, Minimize2, MoreVertical, Plus, Activity, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { IndicatorModal } from './IndicatorModal';
 import { DrawingToolbar, DrawingTool } from './DrawingToolbar';
@@ -156,7 +156,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             },
         });
 
-        const candleSeries = mainChart.addCandlestickSeries({
+        const candleSeries = mainChart.addSeries(CandlestickSeries, {
             upColor: '#26a69a',
             downColor: '#ef5350',
             borderVisible: false,
@@ -164,7 +164,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             wickDownColor: '#ef5350',
         });
 
-        const volumeSeries = mainChart.addHistogramSeries({
+        const volumeSeries = mainChart.addSeries(HistogramSeries, {
             color: '#26a69a',
             priceFormat: { type: 'volume' },
             priceScaleId: '', // Overlay
@@ -175,10 +175,10 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
         // Initialize Option Level Series (Lines)
         const levels = {
-            support: mainChart.addLineSeries({ color: '#22c55e', lineWidth: 2, title: 'Support' }),
-            resistance: mainChart.addLineSeries({ color: '#ef4444', lineWidth: 2, title: 'Resistance' }),
-            gammaHigh: mainChart.addLineSeries({ color: '#00bcd4', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ High' }),
-            gammaLow: mainChart.addLineSeries({ color: '#f97316', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ Low' }),
+            support: mainChart.addSeries(LineSeries, { color: '#22c55e', lineWidth: 2, title: 'Support' }),
+            resistance: mainChart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 2, title: 'Resistance' }),
+            gammaHigh: mainChart.addSeries(LineSeries, { color: '#00bcd4', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ High' }),
+            gammaLow: mainChart.addSeries(LineSeries, { color: '#f97316', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ Low' }),
         };
 
         chartInstancesRef.current = {
@@ -206,16 +206,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         };
         window.addEventListener('resize', handleResize);
 
-        // Map Click for Drawing
-        mainChart.subscribeClick((param) => {
-            if (!param.point || !param.time || activeTool === 'cursor') return;
-            handleDrawingClick(param.time as number, (param.seriesPrices.get(candleSeries) as any)?.close || param.point.y);
-            // Note: getting price from click is tricky in LW charts without exact coordinate conversion in event
-            // Using coordinate conversion below in handler
-        });
-
-        // Improve click handler using container events for precise coordinate->price mapping
-        // We handle this via the overlay div pointer events
+        // handle click via container
 
         return () => {
             window.removeEventListener('resize', handleResize);
@@ -294,18 +285,16 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 // Create series
                 let series: ISeriesApi<"Line"> | ISeriesApi<"Histogram">;
                 if (def.type === 'histogram') {
-                    series = mainChart.addHistogramSeries({
+                    series = mainChart.addSeries(HistogramSeries, {
                         color: ind.color,
                         priceFormat: { type: 'volume' },
                         priceScaleId: 'indicators', // separate scale
                     });
                 } else {
-                    series = mainChart.addLineSeries({
+                    series = mainChart.addSeries(LineSeries, {
                         color: ind.color,
                         lineWidth: 2,
                         title: def.name,
-                        // priceScaleId: 'indicators' // For now share scale or use overlay? 
-                        // Oscillators need own scale usually.
                         priceScaleId: (def.category === 'Momentum' || def.category === 'Volume') ? 'indicators' : 'right'
                     });
                 }
@@ -394,7 +383,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             }
         });
 
-    }, [drawings, activeTool, ohlcvData]); // Redraw when data changes (zoom/pan updates coords via subscribeVisibleTimeRangeChange ideally)
+    }, [drawings, activeTool, ohlcvData]);
 
     // Hook up canvas redraw to chart updates
     useEffect(() => {
@@ -411,7 +400,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         };
     }, [drawOverlay]);
 
-    // Handle container clicks for drawing (Coordinate mapping)
+    // Handle container clicks for drawing
     const handleContainerClick = (e: React.MouseEvent) => {
         if (activeTool === 'cursor') return;
 
@@ -423,8 +412,6 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Convert to time/price
-        // Note: coordinateToTime is not perfect for exact empty spaces, but works for snapped candles
         const time = chart.timeScale().coordinateToTime(x) as number;
         const price = series.coordinateToPrice(y);
 

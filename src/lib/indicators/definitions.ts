@@ -37,9 +37,7 @@ export const AVAILABLE_INDICATORS: IndicatorDef[] = [
     createSimple('ema', 'Exponential Moving Average (EMA)', 'Trend', TA.EMA, 14),
     createSimple('wma', 'Weighted Moving Average (WMA)', 'Trend', TA.WMA, 14),
     createSimple('wema', 'Wilder\'s Smoothing (WEMA)', 'Trend', TA.WEMA, 14),
-    createSimple('trima', 'Triangular Moving Average (TRIMA)', 'Trend', TA.TRIMA, 14),
-    createSimple('kama', 'Kaufman Adaptive Moving Average (KAMA)', 'Trend', TA.KAMA, 14),
-    createSimple('hma', 'Hull Moving Average (HMA)', 'Trend', TA.HMA, 14),
+    // Removed TRIMA/KAMA/HMA to ensure build stability with current lib version
 
     {
         id: 'psar',
@@ -119,7 +117,9 @@ export const AVAILABLE_INDICATORS: IndicatorDef[] = [
             const signal = getInput(inputs, 'signal', 9);
             const values = TA.MACD.calculate({
                 fastPeriod: fast, slowPeriod: slow, signalPeriod: signal,
-                values: data.map(d => d.close)
+                values: data.map(d => d.close),
+                SimpleMAOscillator: false,
+                SimpleMASignal: false
             });
             const offset = data.length - values.length;
             return values.map((v, i) => ({ time: data[i + offset].time, value: v.MACD }));
