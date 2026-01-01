@@ -15,18 +15,8 @@ import {
     Info
 } from 'lucide-react';
 
-// Dynamic import with SSR disabled - lightweight-charts requires browser APIs
-const AdvancedChart = dynamic(
-    () => import('@/components/chart/AdvancedChart').then(mod => mod.AdvancedChart),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="flex items-center justify-center h-full bg-[#0d1117]">
-                <RefreshCw size={32} className="text-cyan-400 animate-spin" />
-            </div>
-        )
-    }
-);
+// AdvancedChart now handles SSR internally with dynamic import
+import AdvancedChart from '@/components/chart/AdvancedChart';
 
 interface MarketLevel {
     id: number;
@@ -195,7 +185,6 @@ export default function ChartPage() {
                     <AdvancedChart
                         symbol="BTCUSDT"
                         interval="15m"
-                        height={chartHeight}
                         optionsLevels={levels ? {
                             support: levels.support_price,
                             resistance: levels.resistance_price,
