@@ -249,7 +249,8 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 // Find latest level applicable to this candle
                 let level = sortedLevels[0];
                 for (let i = sortedLevels.length - 1; i >= 0; i--) {
-                    if (sortedLevels[i].timestamp / 1000 <= candle.time) {
+                    // Check if level timestamp (seconds) is before or equal to candle time
+                    if (sortedLevels[i].timestamp <= candle.time) {
                         level = sortedLevels[i];
                         break;
                     }
