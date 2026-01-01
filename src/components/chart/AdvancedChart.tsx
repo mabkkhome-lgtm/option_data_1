@@ -91,6 +91,8 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     // Drawing State
     const [activeTool, setActiveTool] = useState<DrawingTool>('cursor');
     const [drawings, setDrawings] = useState<Drawing[]>([]);
+    const [drawingsVisible, setDrawingsVisible] = useState(true);
+    const [drawingsLocked, setDrawingsLocked] = useState(false);
 
     // 1. Fetch Data
     const fetchData = useCallback(async () => {
@@ -188,19 +190,31 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         // Resize handler
         const handleResize = () => {
             if (chartContainerRef.current) {
-                mainChart.applyOptions({
-                    width: chartContainerRef.current.clientWidth,
-                    height: chartContainerRef.current.clientHeight
-                });
+                const width = chartContainerRef.current.clientWidth;
+                const height = chartContainerRef.current.clientHeight;
+
+                if (width === 0 || height === 0) return;
+
+                mainChart.applyOptions({ width, height });
+
                 // Sync canvas size
                 if (overlayRef.current) {
-                    overlayRef.current.width = chartContainerRef.current.clientWidth;
-                    overlayRef.current.height = chartContainerRef.current.clientHeight;
+                    overlayRef.current.width = width;
+                    overlayRef.current.height = height;
                     requestAnimationFrame(drawOverlay);
                 }
             }
         };
-        window.addEventListener('resize', handleResize);
+
+        // Use ResizeObserver for accurate container sizing handling sidebar toggles etc
+        const resizeObserver = new ResizeObserver(() => {
+            // Wrap in requestAnimationFrame to avoid "ResizeObserver loop limit exceeded"
+            requestAnimationFrame(handleResize);
+        });
+
+        if (chartContainerRef.current) {
+            resizeObserver.observe(chartContainerRef.current);
+        }
 
         // Initial sizing
         handleResize();
@@ -208,7 +222,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         // handle click via container
 
         return () => {
-            window.removeEventListener('resize', handleResize);
+            resizeObserver.disconnect();
             mainChart.remove();
         };
     }, []);
@@ -522,6 +536,12 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 </div>
             </div>
 
+    // State for drawing controls
+            const [drawingsVisible, setDrawingsVisible] = useState(true);
+            const [drawingsLocked, setDrawingsLocked] = useState(false);
+
+            // ... (existing code) ...
+
             {/* Main Area */}
             <div className="flex-1 relative">
                 {/* Left Toolbar - absolute positioned within this container */}
@@ -529,18 +549,32 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     activeTool={activeTool}
                     onSelectTool={setActiveTool}
                     onClearAll={() => { setDrawings([]); drawOverlay(); }}
+                    onToggleVisibility={() => {
+                        setDrawingsVisible(prev => {
+                            const newValue = !prev;
+                            // Trigger redraw after state update
+                            requestAnimationFrame(drawOverlay);
+                            return newValue;
+                        });
+                    }}
+                    onLockDrawings={() => setDrawingsLocked(prev => !prev)}
+                    drawingsVisible={drawingsVisible}
+                    drawingsLocked={drawingsLocked}
                 />
 
                 {/* Chart Container - with left padding for toolbar */}
                 <div
                     className="absolute left-12 top-0 right-0 bottom-0"
                     ref={chartContainerRef}
-                    onClick={handleContainerClick}
+                    onClick={(e) => {
+                        if (drawingsLocked) return;
+                        handleContainerClick(e);
+                    }}
                     onMouseMove={handleMouseMove}
                 >
                     <canvas
                         ref={overlayRef}
-                        className="absolute top-0 left-0 pointer-events-none z-10"
+                        className={`absolute top-0 left-0 pointer-events-none z-10 ${!drawingsVisible ? 'opacity-0' : ''}`}
                         width={100} height={100}
                     />
                 </div>
