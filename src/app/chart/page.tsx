@@ -63,17 +63,32 @@ export default function ChartPage() {
             // 1. Trigger the calculation
             await fetch('/api/cron/market-levels');
 
-            // 2. Fetch historical levels for line series (last 100 records)
+            // 2. Calculate 24 hours ago timestamp for filtering
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+            // 3. Fetch historical levels for line series (last 24 hours only)
             const { data, error } = await supabase
                 .from('market_levels')
                 .select('*')
-                .order('timestamp', { ascending: true })
-                .limit(100);
+                .gte('timestamp', twentyFourHoursAgo)
+                .order('timestamp', { ascending: true });
 
             if (error) throw error;
             if (data && data.length > 0) {
-                setLevelsHistory(data);
-                setLevels(data[data.length - 1]); // Latest is the last one
+                // Filter out invalid records where support == resistance (calculation errors)
+                const validData = data.filter(d =>
+                    d.support_price !== d.resistance_price &&
+                    d.support_price > 0 &&
+                    d.resistance_price > 0
+                );
+
+                if (validData.length > 0) {
+                    setLevelsHistory(validData);
+                    setLevels(validData[validData.length - 1]); // Latest is the last one
+                } else if (data.length > 0) {
+                    // Fallback to latest even if invalid
+                    setLevels(data[data.length - 1]);
+                }
                 setLastUpdate(new Date());
             }
             setLoading(false);
