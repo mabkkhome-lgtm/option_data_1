@@ -127,103 +127,121 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         return () => clearInterval(timer);
     }, [fetchData]);
 
+    // Debug State for Error Tracking
+    const [debugError, setDebugError] = useState<string | null>(null);
+
     // 2. Initialize Chart
     useEffect(() => {
-        if (!chartContainerRef.current) return;
-
-        const mainChart = createChart(chartContainerRef.current, {
-            layout: {
-                background: { type: ColorType.Solid, color: '#131722' },
-                textColor: '#d1d4dc',
-            },
-            grid: {
-                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-            },
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight,
-            crosshair: {
-                mode: CrosshairMode.Normal,
-            },
-            timeScale: {
-                borderColor: '#485c7b',
-                timeVisible: true, // Needed for intraday
-            },
-            rightPriceScale: {
-                borderColor: '#485c7b',
-            },
-        });
-
-        const candleSeries = mainChart.addSeries(CandlestickSeries, {
-            upColor: '#26a69a',
-            downColor: '#ef5350',
-            borderVisible: false,
-            wickUpColor: '#26a69a',
-            wickDownColor: '#ef5350',
-        });
-
-        const volumeSeries = mainChart.addSeries(HistogramSeries, {
-            color: '#26a69a',
-            priceFormat: { type: 'volume' },
-            priceScaleId: '', // Overlay
-        });
-        volumeSeries.priceScale().applyOptions({
-            scaleMargins: { top: 0.8, bottom: 0 },
-        });
-
-        // Initialize Option Level Series (Lines)
-        const levels = {
-            support: mainChart.addSeries(LineSeries, { color: '#22c55e', lineWidth: 2, title: 'Support' }),
-            resistance: mainChart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 2, title: 'Resistance' }),
-            gammaHigh: mainChart.addSeries(LineSeries, { color: '#00bcd4', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ High' }),
-            gammaLow: mainChart.addSeries(LineSeries, { color: '#f97316', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ Low' }),
-        };
-
-        chartInstancesRef.current = {
-            mainChart,
-            candleSeries,
-            volumeSeries,
-            levelSeries: levels,
-            indicatorSeriesMap: new Map(),
-        };
-
-        // Resize handler
-        const handleResize = () => {
-            if (chartContainerRef.current) {
-                const width = chartContainerRef.current.clientWidth;
-                const height = chartContainerRef.current.clientHeight;
-
-                if (width === 0 || height === 0) return;
-
-                mainChart.applyOptions({ width, height });
-
-                // Sync canvas size
-                if (overlayRef.current) {
-                    overlayRef.current.width = width;
-                    overlayRef.current.height = height;
-                    requestAnimationFrame(drawOverlay);
-                }
-            }
-        };
-
-        // Use ResizeObserver for accurate container sizing handling sidebar toggles etc
-        const resizeObserver = new ResizeObserver(() => {
-            // Wrap in requestAnimationFrame to avoid "ResizeObserver loop limit exceeded"
-            requestAnimationFrame(handleResize);
-        });
-
-        if (chartContainerRef.current) {
-            resizeObserver.observe(chartContainerRef.current);
+        if (!chartContainerRef.current) {
+            setDebugError("Container ref is null");
+            return;
         }
 
-        // Initial sizing
-        handleResize();
+        let mainChart: IChartApi | null = null;
+        let resizeObserver: ResizeObserver | null = null;
 
-        // handle click via container
+        try {
+            console.log("Initializing Chart...");
+            mainChart = createChart(chartContainerRef.current, {
+                layout: {
+                    background: { type: ColorType.Solid, color: '#131722' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                    horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                },
+                width: chartContainerRef.current.clientWidth || 800, // Fallback width
+                height: chartContainerRef.current.clientHeight || 500, // Fallback height
+                crosshair: {
+                    mode: CrosshairMode.Normal,
+                },
+                timeScale: {
+                    borderColor: '#485c7b',
+                    timeVisible: true,
+                },
+                rightPriceScale: {
+                    borderColor: '#485c7b',
+                },
+            });
+
+            const candleSeries = mainChart.addSeries(CandlestickSeries, {
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+            });
+
+            const volumeSeries = mainChart.addSeries(HistogramSeries, {
+                color: '#26a69a',
+                priceFormat: { type: 'volume' },
+                priceScaleId: '', // Overlay
+            });
+            volumeSeries.priceScale().applyOptions({
+                scaleMargins: { top: 0.8, bottom: 0 },
+            });
+
+            // Level Series
+            const supportSeries = mainChart.addSeries(LineSeries, { color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Solid, crosshairMarkerVisible: false, priceLineVisible: false });
+            const resistanceSeries = mainChart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Solid, crosshairMarkerVisible: false, priceLineVisible: false });
+            const gammaHighSeries = mainChart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, lineStyle: LineStyle.Dashed, crosshairMarkerVisible: false, priceLineVisible: false });
+            const gammaLowSeries = mainChart.addSeries(LineSeries, { color: '#f97316', lineWidth: 1, lineStyle: LineStyle.Dashed, crosshairMarkerVisible: false, priceLineVisible: false });
+
+            const levels = {
+                support: supportSeries,
+                resistance: resistanceSeries,
+                gammaHigh: gammaHighSeries,
+                gammaLow: gammaLowSeries
+            };
+
+            chartInstancesRef.current = {
+                mainChart,
+                candleSeries,
+                volumeSeries,
+                levelSeries: levels,
+                indicatorSeriesMap: new Map(),
+            };
+
+            // Resize handler
+            const handleResize = () => {
+                if (chartContainerRef.current && mainChart) {
+                    const width = chartContainerRef.current.clientWidth;
+                    const height = chartContainerRef.current.clientHeight;
+
+                    if (width === 0 || height === 0) return;
+
+                    mainChart.applyOptions({ width, height });
+
+                    // Sync canvas size
+                    if (overlayRef.current) {
+                        overlayRef.current.width = width;
+                        overlayRef.current.height = height;
+                        requestAnimationFrame(drawOverlay);
+                    }
+                }
+            };
+
+            // Use ResizeObserver for accurate container sizing handling sidebar toggles etc
+            resizeObserver = new ResizeObserver(() => {
+                requestAnimationFrame(handleResize);
+            });
+
+            if (chartContainerRef.current) {
+                resizeObserver.observe(chartContainerRef.current);
+            }
+
+            // Initial sizing
+            handleResize();
+
+        } catch (err: any) {
+            console.error("Chart Init Error:", err);
+            setDebugError(err.message || "Unknown error");
+        }
 
         return () => {
-            resizeObserver.disconnect();
-            mainChart.remove();
+            if (resizeObserver) resizeObserver.disconnect();
+            if (mainChart) mainChart.remove();
         };
     }, []);
 
@@ -580,7 +598,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                         <div>Data: {ohlcvData.length} candles</div>
                         <div>Loading: {loading.toString()}</div>
                         <div>Chart Ref: {chartInstancesRef.current ? 'Created' : 'Null'}</div>
-                        <div>Error: {null /* placeholder */}</div>
+                        <div>Error: {debugError || 'None'}</div>
                     </div>
                 </div>
             </div>
