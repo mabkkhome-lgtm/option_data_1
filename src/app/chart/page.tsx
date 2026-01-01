@@ -60,34 +60,35 @@ export default function ChartPage() {
         if (!supabase) return;
 
         try {
-            // 1. Trigger the calculation
+            // 1. Trigger the calculation - this inserts fresh data
             await fetch('/api/cron/market-levels');
 
-            // 2. Calculate 24 hours ago timestamp for filtering
-            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            // 2. Wait a moment for the insert to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-            // 3. Fetch historical levels for line series (last 24 hours only)
+            // 3. Fetch the most recent record (should be the one just inserted)
             const { data, error } = await supabase
                 .from('market_levels')
                 .select('*')
-                .gte('timestamp', twentyFourHoursAgo)
-                .order('timestamp', { ascending: true });
+                .order('timestamp', { ascending: false })
+                .limit(50);
 
             if (error) throw error;
             if (data && data.length > 0) {
-                // Filter out invalid records where support == resistance (calculation errors)
-                const validData = data.filter(d =>
-                    d.support_price !== d.resistance_price &&
-                    d.support_price > 0 &&
-                    d.resistance_price > 0
+                // Filter for valid records (support != resistance)
+                const validRecords = data.filter(d =>
+                    Math.abs(d.support_price - d.resistance_price) > 100 // At least $100 difference
                 );
 
-                if (validData.length > 0) {
-                    setLevelsHistory(validData);
-                    setLevels(validData[validData.length - 1]); // Latest is the last one
-                } else if (data.length > 0) {
-                    // Fallback to latest even if invalid
-                    setLevels(data[data.length - 1]);
+                if (validRecords.length > 0) {
+                    // Use latest valid record for display
+                    setLevels(validRecords[0]);
+
+                    // Use valid records for history (reversed to ascending order)
+                    setLevelsHistory(validRecords.slice(0, 20).reverse());
+                } else {
+                    // Fallback to most recent even if potentially invalid
+                    setLevels(data[0]);
                 }
                 setLastUpdate(new Date());
             }
