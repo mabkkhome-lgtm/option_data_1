@@ -347,37 +347,42 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
             if (start.x === null || start.y === null || end.x === null || end.y === null) return;
 
+            const startX = start.x;
+            const startY = start.y;
+            const endX = end.x;
+            const endY = end.y;
+
             ctx.beginPath();
             ctx.strokeStyle = activeTool === 'fib' && d.id === 'temp' ? '#aaa' : d.color;
             ctx.lineWidth = 2;
 
             if (d.type === 'trendline') {
-                ctx.moveTo(start.x, start.y);
-                ctx.lineTo(end.x, end.y);
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
                 ctx.stroke();
             } else if (d.type === 'fib') {
                 // Simple Fib Drawing (0, 0.5, 1)
-                const yDiff = end.y - start.y;
-                const width = Math.max(200, end.x - start.x + 100); // Extend right
+                const yDiff = endY - startY;
+                const width = Math.max(200, endX - startX + 100); // Extend right
 
                 const levels = [0, 0.382, 0.5, 0.618, 1];
                 levels.forEach(l => {
-                    const y = start.y + yDiff * l;
+                    const y = startY + yDiff * l;
                     ctx.beginPath();
-                    ctx.moveTo(start.x, y);
-                    ctx.lineTo(start.x + width, y);
+                    ctx.moveTo(startX, y);
+                    ctx.lineTo(startX + width, y);
                     ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l})`;
                     ctx.stroke();
                     ctx.fillStyle = '#fff';
-                    ctx.fillText(`${l}`, start.x + 5, y - 2);
+                    ctx.fillText(`${l}`, startX + 5, y - 2);
                 });
 
                 // Diagonal
                 ctx.beginPath();
                 ctx.setLineDash([5, 5]);
                 ctx.strokeStyle = '#666';
-                ctx.moveTo(start.x, start.y);
-                ctx.lineTo(end.x, end.y);
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
                 ctx.stroke();
                 ctx.setLineDash([]);
             }
