@@ -76,26 +76,30 @@ async function fetchDeribitTrades(
 
 // Parse instrument name to extract details
 function parseInstrument(name: string) {
-    const match = name.match(/^(\w+)-(\d+\w+\d+)-(\d+)-([CP])$/);
+    // Deribit format: BTC-3JAN26-98000-C or BTC-31DEC24-95000-P
+    // Day can be 1 or 2 digits
+    const match = name.match(/^(\w+)-(\d{1,2})(\w{3})(\d{2})-(\d+)-([CP])$/);
     if (!match) return null;
 
-    const expiryStr = match[2];
     const months: Record<string, string> = {
         'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
         'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
         'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
     };
 
-    const day = expiryStr.slice(0, 2);
-    const month = months[expiryStr.slice(2, 5)];
-    const year = '20' + expiryStr.slice(5, 7);
+    const day = match[2].padStart(2, '0'); // "3" -> "03", "31" -> "31"
+    const monthStr = match[3].toUpperCase();
+    const month = months[monthStr];
+    const year = '20' + match[4]; // "26" -> "2026"
+
+    if (!month) return null; // Invalid month
 
     return {
         currency: match[1],
-        expiry: match[2],
-        expiryDate: `${year}-${month}-${day}`,
-        strike: parseInt(match[3]),
-        optionType: match[4] === 'C' ? 'call' : 'put',
+        expiry: `${match[2]}${match[3]}${match[4]}`, // Original format for filtering: "3JAN26"
+        expiryDate: `${year}-${month}-${day}`, // ISO format for DB: "2026-01-03"
+        strike: parseInt(match[5]),
+        optionType: match[6] === 'C' ? 'call' : 'put',
     };
 }
 

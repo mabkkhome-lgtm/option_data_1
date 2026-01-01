@@ -1,151 +1,244 @@
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/client';
 import { calculateGreeks } from '@/lib/options/blackScholes';
-import type { DbTrade } from '@/lib/supabase/client';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow 1 minute timeout for calculation
+export const maxDuration = 60;
 
-// Format Date to Deribit Expiry Format (e.g., 2JAN25)
+const DERIBIT_API_BASE = 'https://www.deribit.com/api/v2';
+
 function getDeribitExpiryFormat(date: Date): string {
-    const d = date.getDate();
-    const m = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    const y = date.getFullYear().toString().slice(-2);
+    const d = date.getUTCDate();
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const m = months[date.getUTCMonth()];
+    const y = date.getUTCFullYear().toString().slice(-2);
     return `${d}${m}${y}`;
 }
 
-export async function GET(request: Request) {
-    // Optional: Add simple secret check to prevent unauthorized calls
-    const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        // Allow unauthenticated for now if CRON_SECRET not set, or return 401
+function parseInstrument(name: string) {
+    const match = name.match(/^(\w+)-(\d{1,2})(\w{3})(\d{2})-(\d+)-([CP])$/);
+    if (!match) return null;
+    return {
+        currency: match[1],
+        expiry: `${match[2]}${match[3]}${match[4]}`,
+        strike: parseInt(match[5]),
+        optionType: match[6] === 'C' ? 'call' : 'put' as 'call' | 'put',
+    };
+}
+
+async function fetchDeribitTrades(currency: string, startTimestamp: number, endTimestamp: number): Promise<any[]> {
+    const allTrades: any[] = [];
+    let hasMore = true;
+    let lastTimestamp = endTimestamp;
+
+    while (hasMore && allTrades.length < 15000) {
+        const url = new URL(`${DERIBIT_API_BASE}/public/get_last_trades_by_currency`);
+        url.searchParams.append('currency', currency);
+        url.searchParams.append('kind', 'option');
+        url.searchParams.append('count', '1000');
+        url.searchParams.append('sorting', 'desc');
+        url.searchParams.append('start_timestamp', startTimestamp.toString());
+        url.searchParams.append('end_timestamp', lastTimestamp.toString());
+
+        const response = await fetch(url.toString());
+        const data = await response.json();
+
+        if (data.result?.trades && data.result.trades.length > 0) {
+            allTrades.push(...data.result.trades);
+            const oldestTimestamp = data.result.trades[data.result.trades.length - 1].timestamp;
+            if (oldestTimestamp <= startTimestamp) {
+                hasMore = false;
+            } else {
+                lastTimestamp = oldestTimestamp - 1;
+                hasMore = data.result.has_more && data.result.trades.length === 1000;
+            }
+        } else {
+            hasMore = false;
+        }
     }
 
+    return allTrades;
+}
+
+export async function GET() {
     try {
         console.log(`[Cron] Starting calculation at ${new Date().toISOString()}`);
 
         const now = new Date();
-        const midnight = new Date(now);
-        midnight.setHours(0, 0, 0, 0);
+        const midnightUTC = new Date(now);
+        midnightUTC.setUTCHours(0, 0, 0, 0);
+        const userMidnight = new Date(midnightUTC.getTime() - 1 * 60 * 60 * 1000);
 
-        // Determine Tomorrow's Expiry
         const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const expiryStr = getDeribitExpiryFormat(tomorrow);
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        const expiryTarget = getDeribitExpiryFormat(tomorrow);
 
-        // Fetch Trades
-        if (!supabase) throw new Error('Supabase client not initialized');
+        console.log(`[Cron] User midnight (CET): ${userMidnight.toISOString()}`);
 
-        const { data, error } = await supabase
-            .from('trades')
-            .select('*')
-            .gte('timestamp', midnight.toISOString())
-            .eq('expiry_date', expiryStr);
+        const windowStart = userMidnight.getTime();
+        const endTs = now.getTime();
+        const allDeribitTrades = await fetchDeribitTrades('BTC', windowStart, endTs);
 
-        if (error) throw error;
+        console.log(`[Cron] Fetched ${allDeribitTrades.length} total trades`);
 
-        const trades = data as DbTrade[];
+        // Filter for tomorrow's expiry
+        const trades = allDeribitTrades.filter(t => {
+            const parsed = parseInstrument(t.instrument_name);
+            return parsed && parsed.expiry === expiryTarget;
+        }).map(t => {
+            const parsed = parseInstrument(t.instrument_name)!;
+            return {
+                ...t,
+                strike: parsed.strike,
+                option_type: parsed.optionType,
+                iv: t.iv,
+                index_price: t.index_price,
+                amount: t.amount,
+                direction: t.direction,
+                price_usd: t.price * t.index_price, // Premium in USD
+            };
+        });
 
-        if (!trades || trades.length === 0) {
-            return NextResponse.json({ message: 'No trades found', expiry: expiryStr });
-        }
+        console.log(`[Cron] Filtered to ${trades.length} trades`);
 
-        // Split Longs (Buyers) / Shorts (Sellers)
         const longs = trades.filter(t => t.direction === 'buy');
         const shorts = trades.filter(t => t.direction === 'sell');
 
-        // Build Curves
-        // Spot Price from latest trade or index
-        const latestTrade = trades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-        const spot = latestTrade.index_price || latestTrade.price_usd || 100000;
+        const spot = allDeribitTrades[0]?.index_price || 88000;
 
-        const minPrice = spot * 0.8;
-        const maxPrice = spot * 1.2;
-        const steps = 200;
-        const stepSize = (maxPrice - minPrice) / (steps - 1);
-        const prices = Array.from({ length: steps }, (_, i) => minPrice + i * stepSize);
+        // Price range
+        const minPrice = spot * 0.7;
+        const maxPrice = spot * 1.3;
+        const numSteps = 300;
+        const prices: number[] = [];
+        for (let i = 0; i < numSteps; i++) {
+            prices.push(minPrice + (maxPrice - minPrice) * (i / (numSteps - 1)));
+        }
 
-        const buildCurve = (tradeList: DbTrade[], multiplier: number) => {
-            return prices.map(p => {
-                let sumDelta = 0;
-                let sumGamma = 0;
-                tradeList.forEach(t => {
-                    const day = parseInt(t.expiry_date);
-                    const monthStr = t.expiry_date.replace(/\d+/, '').slice(0, 3);
-                    const yearStr = t.expiry_date.slice(-2);
-                    const monthMap: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
-                    let T = 0.001;
+        const daysToExpiry = 7;
+        const T = Math.max(0.001, daysToExpiry / 365);
+        const r = 0.05;
 
-                    if (t.expiry_date.length > 3) {
-                        const parsedDate = new Date(2000 + parseInt(yearStr), monthMap[monthStr] || 0, day);
-                        T = Math.max(0.0001, (parsedDate.getTime() - now.getTime()) / (365 * 24 * 3600 * 1000));
-                    }
+        // Build PAYOFF AT EXPIRY, DELTA, and GAMMA curves
+        const buildCurve = (tradeList: any[]) => {
+            return prices.map(price => {
+                let totalPayoffExpiry = 0;
+                let totalDelta = 0;
+                let totalGamma = 0;
 
-                    const iv = t.iv ? t.iv / 100 : 0.8;
-                    const bs = calculateGreeks(p, t.strike, T, 0.05, iv, t.option_type as 'call' | 'put');
-                    sumDelta += bs.delta * t.amount * multiplier;
-                    sumGamma += bs.gamma * t.amount * multiplier;
-                });
-                return { price: p, delta: sumDelta, gamma: sumGamma };
+                for (const trade of tradeList) {
+                    const strike = trade.strike;
+                    const type = trade.option_type as 'call' | 'put';
+                    const direction = trade.direction === 'buy' ? 1 : -1;
+                    const size = trade.amount || 1;
+                    const premium = trade.price_usd || 0;
+                    const iv = trade.iv ? trade.iv / 100 : 0.5;
+
+                    // PAYOFF AT EXPIRY (exactly like CombinedChart)
+                    const intrinsic = type === 'call'
+                        ? Math.max(0, price - strike)
+                        : Math.max(0, strike - price);
+                    totalPayoffExpiry += (intrinsic - premium) * direction * size;
+
+                    // GREEKS
+                    const greeks = calculateGreeks(price, strike, T, r, iv, type);
+                    totalDelta += greeks.delta * direction * size;
+                    totalGamma += greeks.gamma * direction * size;
+                }
+
+                return { price, payoff: totalPayoffExpiry, delta: totalDelta, gamma: totalGamma };
             });
         };
 
-        const longCurve = buildCurve(longs, 1);
-        const shortCurve = buildCurve(shorts, -1); // Sellers have negative exposure
+        const longCurve = buildCurve(longs);
+        const shortCurve = buildCurve(shorts);
 
-        // Find Intersections (Delta Support/Resistance)
-        const intersections: number[] = [];
+        // Find PAYOFF intersections (Support/Resistance from white intersection markers)
+        const payoffIntersections: number[] = [];
         for (let i = 0; i < prices.length - 1; i++) {
-            const d1 = longCurve[i].delta;
-            const d2 = shortCurve[i].delta;
-            const diff = d1 - d2;
-
-            const d1_next = longCurve[i + 1].delta;
-            const d2_next = shortCurve[i + 1].delta;
-            const diff_next = d1_next - d2_next;
+            const diff = longCurve[i].payoff - shortCurve[i].payoff;
+            const diff_next = longCurve[i + 1].payoff - shortCurve[i + 1].payoff;
 
             if (Math.sign(diff) !== Math.sign(diff_next)) {
-                const frac = Math.abs(diff) / (Math.abs(diff) + Math.abs(diff_next));
-                const price = prices[i] + (prices[i + 1] - prices[i]) * frac;
-                intersections.push(price);
+                const fraction = Math.abs(diff) / (Math.abs(diff) + Math.abs(diff_next));
+                const crossPrice = prices[i] + (prices[i + 1] - prices[i]) * fraction;
+                payoffIntersections.push(crossPrice);
             }
         }
 
-        intersections.sort((a, b) => a - b);
-        const support = intersections.length > 0 ? intersections[0] : 0;
-        const resistance = intersections.length > 1 ? intersections[intersections.length - 1] : support;
+        payoffIntersections.sort((a, b) => a - b);
 
-        // Find Gamma Extrema
-        let gammaHigh = -Infinity;
-        let gammaHighPrice = 0;
-        longCurve.forEach(p => {
+        // Support = left payoff intersection, Resistance = right payoff intersection
+        const support = payoffIntersections.length > 0 ? payoffIntersections[0] : spot;
+        const resistance = payoffIntersections.length > 1
+            ? payoffIntersections[payoffIntersections.length - 1]
+            : support;
+
+        // Find Gamma extrema (unchanged)
+        let gammaHigh = -Infinity, gammaHighPrice = spot;
+        let gammaLow = Infinity, gammaLowPrice = spot;
+
+        for (const p of longCurve) {
             if (p.gamma > gammaHigh) { gammaHigh = p.gamma; gammaHighPrice = p.price; }
-        });
-
-        let gammaLow = Infinity;
-        let gammaLowPrice = 0;
-        shortCurve.forEach(p => {
+        }
+        for (const p of shortCurve) {
             if (p.gamma < gammaLow) { gammaLow = p.gamma; gammaLowPrice = p.price; }
-        });
+        }
+
+        // Debug: Payoff values at key prices
+        const debugPrices = [84000, 85000, 86000, 86300, 87000, 88000, 88900, 89000, 90000];
+        const debugPayoff: any[] = [];
+        for (const dp of debugPrices) {
+            const idx = prices.findIndex(p => p >= dp);
+            if (idx >= 0) {
+                debugPayoff.push({
+                    price: Math.round(prices[idx]),
+                    L: Math.round(longCurve[idx].payoff),
+                    S: Math.round(shortCurve[idx].payoff),
+                    diff: Math.round(longCurve[idx].payoff - shortCurve[idx].payoff)
+                });
+            }
+        }
+
+        const result = {
+            support: Math.round(support),
+            resistance: Math.round(resistance),
+            gammaHighPrice: Math.round(gammaHighPrice),
+            gammaLowPrice: Math.round(gammaLowPrice),
+            timestamp: now.toISOString(),
+            expiry: expiryTarget
+        };
+
+        console.log(`[Cron] Result: S=${result.support}, R=${result.resistance}, GH=${result.gammaHighPrice}, GL=${result.gammaLowPrice}`);
 
         // Save to DB
-        const { error: insertError } = await supabase.from('market_levels').insert({
-            timestamp: now.toISOString(),
-            expiry_date: expiryStr,
-            current_price: spot,
-            gamma_high_price: gammaHighPrice,
-            gamma_low_price: gammaLowPrice,
-            support_price: support,
-            resistance_price: resistance,
-            window_start: midnight.toISOString()
-        });
-
-        if (insertError) throw insertError;
+        if (supabase) {
+            await supabase.from('market_levels').insert({
+                timestamp: now.toISOString(),
+                expiry_date: expiryTarget,
+                current_price: spot,
+                gamma_high_price: gammaHighPrice,
+                gamma_low_price: gammaLowPrice,
+                support_price: support,
+                resistance_price: resistance,
+                window_start: userMidnight.toISOString()
+            });
+        }
 
         return NextResponse.json({
             success: true,
-            data: { support, resistance, gammaHighPrice, gammaLowPrice }
+            data: result,
+            stats: {
+                totalFetched: allDeribitTrades.length,
+                filteredTrades: trades.length,
+                longs: longs.length,
+                shorts: shorts.length,
+                payoffIntersections: payoffIntersections.length,
+                allPayoffIntersections: payoffIntersections.map(p => Math.round(p)),
+                debugPayoff,
+                spot: Math.round(spot),
+                windowStart: userMidnight.toISOString()
+            }
         });
 
     } catch (error) {

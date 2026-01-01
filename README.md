@@ -1,36 +1,132 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Options Flow Indicator - Quick Reference
 
-## Getting Started
+## Live URLs
 
-First, run the development server:
+| Page | URL |
+|------|-----|
+| Main Dashboard | https://app-nine-tau-91.vercel.app/ |
+| Chart Page | https://app-nine-tau-91.vercel.app/chart |
+| API Endpoint | https://app-nine-tau-91.vercel.app/api/cron/market-levels |
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## What Each Level Means
+
+### Support ($86,285)
+- **Definition**: Left payoff curve intersection between Longs and Shorts
+- **Trading Meaning**: Price level where buyer and seller payoff exposure is equal
+- **Behavior**: Price tends to bounce UP from this level
+
+### Resistance ($88,945)
+- **Definition**: Right payoff curve intersection between Longs and Shorts
+- **Trading Meaning**: Price level where buyer and seller payoff exposure is equal
+- **Behavior**: Price tends to bounce DOWN from this level
+
+### Gamma High ($87,839)
+- **Definition**: Price where buyer gamma exposure is maximum
+- **Trading Meaning**: Price level where market makers need to buy as price rises
+- **Behavior**: Can act as a magnet for price ("gamma squeeze" potential)
+
+### Gamma Low ($88,016)
+- **Definition**: Price where seller gamma exposure is most negative
+- **Trading Meaning**: Price level where sellers are most exposed
+- **Behavior**: Can act as resistance due to hedging pressure
+
+---
+
+## How to Use
+
+### On the Dashboard
+1. Open https://app-nine-tau-91.vercel.app/
+2. Add two Market Screener widgets
+3. Configure Screener 1: BTC, Today, Expiry Tomorrow, Side: **Long**
+4. Configure Screener 2: BTC, Today, Expiry Tomorrow, Side: **Short**
+5. Add Combined Chart widget
+6. Connect both screeners to the Combined Chart (click "IN" mode)
+7. The white dots show Support/Resistance
+8. The purple markers show Gamma High/Low
+
+### On the Chart Page
+1. Open https://app-nine-tau-91.vercel.app/chart
+2. The Options Flow Indicator panel shows all 4 levels
+3. Values update every 5 seconds automatically
+4. Use TradingView drawing tools to mark these levels on the chart
+
+---
+
+## Files Location
+
+```
+/Users/mat/Desktop/indicator/Option_app/app/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                    # Main dashboard
+│   │   ├── chart/page.tsx              # Chart page with TradingView
+│   │   └── api/
+│   │       ├── cron/market-levels/     # Main calculation API
+│   │       ├── collect/                # Trade collection
+│   │       └── debug/                  # Debug utilities
+│   ├── components/
+│   │   └── widgets/
+│   │       ├── CombinedChart/          # Combined chart visualization
+│   │       ├── MarketScreener/         # Trade screener
+│   │       └── ...
+│   └── lib/
+│       ├── options/blackScholes.ts     # Pricing engine
+│       └── supabase/client.ts          # Database client
+├── DOCUMENTATION.md                     # Full documentation
+└── README.md                            # This quick reference
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Deploy to Production
+```bash
+cd /Users/mat/Desktop/indicator/Option_app/app
+vercel --prod
+```
 
-## Learn More
+### Run Locally
+```bash
+cd /Users/mat/Desktop/indicator/Option_app/app
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Test API
+```bash
+curl -s "https://app-nine-tau-91.vercel.app/api/cron/market-levels" | jq '.data'
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database (Supabase)
 
-## Deploy on Vercel
+**Project URL**: Check your Supabase dashboard
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Table**: `market_levels`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Column | Description |
+|--------|-------------|
+| support_price | Left payoff intersection |
+| resistance_price | Right payoff intersection |
+| gamma_high_price | Max buyer gamma price |
+| gamma_low_price | Min seller gamma price |
+| current_price | Spot price at calculation |
+| expiry_date | Target expiry (e.g., "2JAN26") |
+| timestamp | When calculated |
+
+---
+
+## Update Frequency
+
+- **Chart Page**: Polls every **5 seconds** when open
+- **Database**: Updated with each poll
+- **Data Source**: Live Deribit trades from CET midnight
+
+---
+
+## Last Updated
+
+2026-01-01 by AI Assistant (Antigravity)
