@@ -13,6 +13,14 @@ interface OHLCV {
     volume: number;
 }
 
+interface LevelHistoryPoint {
+    timestamp: number;
+    support: number;
+    resistance: number;
+    gammaHigh: number;
+    gammaLow: number;
+}
+
 type IndicatorType = 'sma' | 'ema' | 'vwap' | 'rsi';
 
 interface AdvancedChartProps {
@@ -25,6 +33,7 @@ interface AdvancedChartProps {
         gammaHigh?: number;
         gammaLow?: number;
     };
+    levelsHistory?: LevelHistoryPoint[];
 }
 
 const INTERVALS = [
@@ -47,7 +56,8 @@ export function AdvancedChart({
     symbol = 'BTCUSDT',
     interval: initialInterval = '15m',
     height = 600,
-    optionsLevels
+    optionsLevels,
+    levelsHistory = []
 }: AdvancedChartProps) {
     const mainChartRef = useRef<HTMLDivElement>(null);
     const subChartRef = useRef<HTMLDivElement>(null);
@@ -58,6 +68,12 @@ export function AdvancedChart({
         candleSeries: any;
         volumeSeries: any;
         indicatorSeries: Map<string, any>;
+        levelSeries: {
+            support: any;
+            resistance: any;
+            gammaHigh: any;
+            gammaLow: any;
+        } | null;
     } | null>(null);
 
     const [interval, setInterval] = useState(initialInterval);
@@ -101,7 +117,6 @@ export function AdvancedChart({
 
         const initCharts = async () => {
             try {
-                // Dynamically import lightweight-charts
                 const { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } = await import('lightweight-charts');
 
                 if (!mainChartRef.current) return;
@@ -139,6 +154,43 @@ export function AdvancedChart({
                 });
                 mainChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
+                // Create 4 dedicated line series for options levels
+                const supportSeries = mainChart.addSeries(LineSeries, {
+                    color: '#22c55e',
+                    lineWidth: 2,
+                    lineStyle: 0, // Solid
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    title: 'Support',
+                });
+
+                const resistanceSeries = mainChart.addSeries(LineSeries, {
+                    color: '#ef4444',
+                    lineWidth: 2,
+                    lineStyle: 0, // Solid
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    title: 'Resistance',
+                });
+
+                const gammaHighSeries = mainChart.addSeries(LineSeries, {
+                    color: '#00bcd4',
+                    lineWidth: 2,
+                    lineStyle: 2, // Dashed
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    title: 'Γ High',
+                });
+
+                const gammaLowSeries = mainChart.addSeries(LineSeries, {
+                    color: '#f97316',
+                    lineWidth: 2,
+                    lineStyle: 2, // Dashed
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    title: 'Γ Low',
+                });
+
                 // Create sub chart for oscillators
                 let subChart = null;
                 if (subChartRef.current) {
@@ -165,6 +217,12 @@ export function AdvancedChart({
                     candleSeries,
                     volumeSeries,
                     indicatorSeries: new Map(),
+                    levelSeries: {
+                        support: supportSeries,
+                        resistance: resistanceSeries,
+                        gammaHigh: gammaHighSeries,
+                        gammaLow: gammaLowSeries,
+                    },
                 };
 
                 chartsInitialized.current = true;
@@ -201,7 +259,7 @@ export function AdvancedChart({
         return () => window.clearInterval(timer);
     }, [fetchData]);
 
-    // Update chart with data
+    // Update chart with candle data
     useEffect(() => {
         if (!chartInstancesRef.current || ohlcvData.length === 0) return;
 
@@ -220,19 +278,63 @@ export function AdvancedChart({
             value: d.volume,
             color: d.close >= d.open ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
         })));
+    }, [ohlcvData]);
 
-        // Add price lines for options levels
-        if (optionsLevels) {
-            if (optionsLevels.support) {
-                candleSeries.createPriceLine({ price: optionsLevels.support, color: '#22c55e', lineWidth: 2, title: 'S' });
+    // Update options level line series with historical data
+    useEffect(() => {
+        if (!chartInstancesRef.current?.levelSeries || ohlcvData.length === 0) return;
+
+        const { levelSeries } = chartInstancesRef.current;
+
+        // If we have historical levels, map them to chart time and draw as lines
+        if (levelsHistory.length > 0) {
+            // Get the time range of our candles
+            const candleStartTime = ohlcvData[0].time;
+            const candleEndTime = ohlcvData[ohlcvData.length - 1].time;
+
+            // Build line data by mapping level timestamps to candle times
+            // For each candle, find the closest level that was valid at that time
+            const supportData: { time: number; value: number }[] = [];
+            const resistanceData: { time: number; value: number }[] = [];
+            const gammaHighData: { time: number; value: number }[] = [];
+            const gammaLowData: { time: number; value: number }[] = [];
+
+            // Sort levels by timestamp
+            const sortedLevels = [...levelsHistory].sort((a, b) => a.timestamp - b.timestamp);
+
+            // For each candle, find the applicable level (latest level before or at candle time)
+            for (const candle of ohlcvData) {
+                // Find the latest level that applies to this candle
+                let applicableLevel: LevelHistoryPoint | null = null;
+                for (let i = sortedLevels.length - 1; i >= 0; i--) {
+                    if (sortedLevels[i].timestamp <= candle.time) {
+                        applicableLevel = sortedLevels[i];
+                        break;
+                    }
+                }
+
+                // If no level found before this candle, use the first available
+                if (!applicableLevel && sortedLevels.length > 0) {
+                    applicableLevel = sortedLevels[0];
+                }
+
+                if (applicableLevel) {
+                    supportData.push({ time: candle.time, value: applicableLevel.support });
+                    resistanceData.push({ time: candle.time, value: applicableLevel.resistance });
+                    gammaHighData.push({ time: candle.time, value: applicableLevel.gammaHigh });
+                    gammaLowData.push({ time: candle.time, value: applicableLevel.gammaLow });
+                }
             }
-            if (optionsLevels.resistance) {
-                candleSeries.createPriceLine({ price: optionsLevels.resistance, color: '#ef4444', lineWidth: 2, title: 'R' });
-            }
+
+            // Set data to each level series
+            if (supportData.length > 0) levelSeries.support.setData(supportData);
+            if (resistanceData.length > 0) levelSeries.resistance.setData(resistanceData);
+            if (gammaHighData.length > 0) levelSeries.gammaHigh.setData(gammaHighData);
+            if (gammaLowData.length > 0) levelSeries.gammaLow.setData(gammaLowData);
         }
-    }, [ohlcvData, optionsLevels]);
+    }, [ohlcvData, levelsHistory]);
 
-    // Calculate and update indicators
+    // Calculate and update technical indicators
     useEffect(() => {
         if (!chartInstancesRef.current || ohlcvData.length === 0) return;
 
@@ -380,6 +482,16 @@ export function AdvancedChart({
                 </div>
 
                 <div className="flex-1" />
+
+                {/* Level indicators legend */}
+                <div className="flex items-center gap-2 text-xs">
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#22c55e]" />S</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#ef4444]" />R</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#00bcd4]" />ΓH</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#f97316]" />ΓL</span>
+                </div>
+
+                <div className="w-px h-6 bg-[#30363d]" />
 
                 {activeIndicators.map(type => (
                     <div key={type} className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-cyan-500/20 text-cyan-400">

@@ -41,6 +41,7 @@ interface MarketLevel {
 
 export default function ChartPage() {
     const [levels, setLevels] = useState<MarketLevel | null>(null);
+    const [levelsHistory, setLevelsHistory] = useState<MarketLevel[]>([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
@@ -54,24 +55,25 @@ export default function ChartPage() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Trigger calculation and fetch latest market levels
+    // Trigger calculation and fetch market levels (latest + history for line series)
     const fetchLevels = useCallback(async () => {
         if (!supabase) return;
 
         try {
-            // 1. Trigger the calculation (fire-and-forget for speed, but we await to ensure it completed)
+            // 1. Trigger the calculation
             await fetch('/api/cron/market-levels');
 
-            // 2. Fetch the latest result from DB
+            // 2. Fetch historical levels for line series (last 100 records)
             const { data, error } = await supabase
                 .from('market_levels')
                 .select('*')
-                .order('timestamp', { ascending: false })
-                .limit(1);
+                .order('timestamp', { ascending: true })
+                .limit(100);
 
             if (error) throw error;
             if (data && data.length > 0) {
-                setLevels(data[0]);
+                setLevelsHistory(data);
+                setLevels(data[data.length - 1]); // Latest is the last one
                 setLastUpdate(new Date());
             }
             setLoading(false);
@@ -163,6 +165,13 @@ export default function ChartPage() {
                             gammaHigh: levels.gamma_high_price,
                             gammaLow: levels.gamma_low_price,
                         } : undefined}
+                        levelsHistory={levelsHistory.map(l => ({
+                            timestamp: new Date(l.timestamp).getTime() / 1000,
+                            support: l.support_price,
+                            resistance: l.resistance_price,
+                            gammaHigh: l.gamma_high_price,
+                            gammaLow: l.gamma_low_price,
+                        }))}
                     />
                 </div>
 
