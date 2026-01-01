@@ -1,1 +1,1 @@
-export { AdvancedChart } from './AdvancedChart';
+export { default as AdvancedChart } from './AdvancedChart';
