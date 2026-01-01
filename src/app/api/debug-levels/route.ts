@@ -9,11 +9,11 @@ export async function GET() {
     }
 
     try {
-        // Get ALL records to see full history
+        // Get ALL records to see full history - DESCENDING to get newest first
         const { data, error, count } = await supabase
             .from('market_levels')
             .select('timestamp, support_price, resistance_price, gamma_high_price, gamma_low_price', { count: 'exact' })
-            .order('timestamp', { ascending: true })
+            .order('timestamp', { ascending: false })
             .limit(1000);
 
         if (error) {
