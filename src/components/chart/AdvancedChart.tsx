@@ -4,13 +4,9 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createChart, ColorType, IChartApi, ISeriesApi, LineStyle, CrosshairMode, Time, LineData, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
 import { Settings, Maximize2, Minimize2, MoreVertical, Plus, Activity, X } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { IndicatorModal } from './IndicatorModal';
 import { DrawingToolbar, DrawingTool } from './DrawingToolbar';
 import { AVAILABLE_INDICATORS } from '../../lib/indicators/definitions';
-
-// Don't SSR this component since it uses lightweight-charts
-const AdvancedChartNoSSR = dynamic(() => Promise.resolve(AdvancedChart), { ssr: false });
 
 export interface OHLCV {
     time: number;
@@ -557,4 +553,5 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     );
 };
 
-export default AdvancedChartNoSSR;
+export { AdvancedChart };
+export default AdvancedChart;

@@ -15,8 +15,18 @@ import {
     Info
 } from 'lucide-react';
 
-// AdvancedChart now handles SSR internally with dynamic import
-import AdvancedChart from '@/components/chart/AdvancedChart';
+// Dynamic import with SSR disabled - lightweight-charts requires browser APIs
+const AdvancedChart = dynamic(
+    () => import('@/components/chart/AdvancedChart'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center h-full bg-[#131722]">
+                <RefreshCw size={32} className="text-cyan-400 animate-spin" />
+            </div>
+        )
+    }
+);
 
 interface MarketLevel {
     id: number;
