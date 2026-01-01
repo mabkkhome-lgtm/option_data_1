@@ -1,10 +1,18 @@
+
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Plus, X, ChevronDown, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { createChart, ColorType, IChartApi, ISeriesApi, LineStyle, CrosshairMode, Time, LineData } from 'lightweight-charts';
+import { Settings, Maximize2, Minimize2, MoreVertical, Plus } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { IndicatorModal } from './IndicatorModal';
+import { DrawingToolbar, DrawingTool } from './DrawingToolbar';
+import { AVAILABLE_INDICATORS } from '../../lib/indicators/definitions';
 
-// Types
-interface OHLCV {
+// Don't SSR this component since it uses lightweight-charts
+const AdvancedChartNoSSR = dynamic(() => Promise.resolve(AdvancedChart), { ssr: false });
+
+export interface OHLCV {
     time: number;
     open: number;
     high: number;
@@ -13,7 +21,7 @@ interface OHLCV {
     volume: number;
 }
 
-interface LevelHistoryPoint {
+export interface LevelHistoryPoint {
     timestamp: number;
     support: number;
     resistance: number;
@@ -21,78 +29,83 @@ interface LevelHistoryPoint {
     gammaLow: number;
 }
 
-type IndicatorType = 'sma' | 'ema' | 'vwap' | 'rsi';
-
 interface AdvancedChartProps {
     symbol?: string;
     interval?: string;
-    height?: number;
     optionsLevels?: {
-        support?: number;
-        resistance?: number;
-        gammaHigh?: number;
-        gammaLow?: number;
+        support: number;
+        resistance: number;
+        gammaHigh: number;
+        gammaLow: number;
     };
     levelsHistory?: LevelHistoryPoint[];
 }
 
-const INTERVALS = [
-    { value: '1m', label: '1m' },
-    { value: '5m', label: '5m' },
-    { value: '15m', label: '15m' },
-    { value: '1h', label: '1H' },
-    { value: '4h', label: '4H' },
-    { value: '1d', label: '1D' },
-];
+interface ActiveIndicator {
+    instanceId: string;
+    defId: string;
+    color: string;
+    settings: Record<string, number>;
+}
 
-const INDICATOR_OPTIONS: { type: IndicatorType; label: string; color: string }[] = [
-    { type: 'sma', label: 'SMA (20)', color: '#2962ff' },
-    { type: 'ema', label: 'EMA (20)', color: '#ff6b6b' },
-    { type: 'vwap', label: 'VWAP', color: '#00bcd4' },
-    { type: 'rsi', label: 'RSI (14)', color: '#9c27b0' },
-];
+interface Drawing {
+    id: string;
+    type: 'trendline' | 'fib';
+    p1: { time: number; price: number };
+    p2: { time: number; price: number } | null; // null while dragging
+    color: string;
+}
 
-export function AdvancedChart({
+const COLORS = ['#2962ff', '#e91e63', '#9c27b0', '#673ab7', '#00bcd4', '#009688', '#ffeb3b', '#ff9800'];
+
+const AdvancedChart: React.FC<AdvancedChartProps> = ({
     symbol = 'BTCUSDT',
-    interval: initialInterval = '15m',
-    height = 600,
+    interval = '15m',
     optionsLevels,
     levelsHistory = []
-}: AdvancedChartProps) {
-    const mainChartRef = useRef<HTMLDivElement>(null);
-    const subChartRef = useRef<HTMLDivElement>(null);
-    const chartsInitialized = useRef(false);
+}) => {
+    const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartInstancesRef = useRef<{
-        mainChart: any;
-        subChart: any;
-        candleSeries: any;
-        volumeSeries: any;
-        indicatorSeries: Map<string, any>;
+        mainChart: IChartApi;
+        candleSeries: ISeriesApi<"Candlestick">;
+        volumeSeries: ISeriesApi<"Histogram">;
         levelSeries: {
-            support: any;
-            resistance: any;
-            gammaHigh: any;
-            gammaLow: any;
-        } | null;
+            support: ISeriesApi<"Line">;
+            resistance: ISeriesApi<"Line">;
+            gammaHigh: ISeriesApi<"Line">;
+            gammaLow: ISeriesApi<"Line">;
+        };
+        indicatorSeriesMap: Map<string, ISeriesApi<any>>;
     } | null>(null);
 
-    const [interval, setInterval] = useState(initialInterval);
-    const [ohlcvData, setOhlcvData] = useState<OHLCV[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>([]);
-    const [showMenu, setShowMenu] = useState(false);
-    const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    // Canvas Overlay Refs
+    const overlayRef = useRef<HTMLCanvasElement>(null);
+    const drawingStateRef = useRef<{
+        isDrawing: boolean;
+        startPoint: { time: number; price: number } | null;
+        currentPoint: { time: number; price: number } | null;
+    }>({ isDrawing: false, startPoint: null, currentPoint: null });
 
-    // Fetch data
+    const [ohlcvData, setOhlcvData] = useState<OHLCV[]>([]);
+    const [activeIndicators, setActiveIndicators] = useState<ActiveIndicator[]>([]);
+    const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
+    const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Drawing State
+    const [activeTool, setActiveTool] = useState<DrawingTool>('cursor');
+    const [drawings, setDrawings] = useState<Drawing[]>([]);
+
+    // 1. Fetch Data
     const fetchData = useCallback(async () => {
         try {
+            // Using public Binance API for this demo
             const response = await fetch(
-                `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=300`
+                `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000`
             );
             const data = await response.json();
             const candles: OHLCV[] = data.map((d: any[]) => ({
-                time: Math.floor(d[0] / 1000),
+                time: Math.floor(d[0] / 1000), // Unix timestamp in seconds
                 open: parseFloat(d[1]),
                 high: parseFloat(d[2]),
                 low: parseFloat(d[3]),
@@ -106,419 +119,446 @@ export function AdvancedChart({
             setLoading(false);
         } catch (err) {
             console.error('Fetch error:', err);
-            setError('Failed to fetch data');
             setLoading(false);
         }
     }, [symbol, interval]);
 
-    // Initialize chart
-    useEffect(() => {
-        if (!mainChartRef.current || chartsInitialized.current) return;
-
-        const initCharts = async () => {
-            try {
-                const { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } = await import('lightweight-charts');
-
-                if (!mainChartRef.current) return;
-
-                // Create main chart
-                const mainChart = createChart(mainChartRef.current, {
-                    width: mainChartRef.current.clientWidth,
-                    height: Math.floor(height * 0.65),
-                    layout: {
-                        background: { type: ColorType.Solid, color: '#0d1117' },
-                        textColor: '#9ca3af',
-                    },
-                    grid: {
-                        vertLines: { color: 'rgba(48, 54, 61, 0.5)' },
-                        horzLines: { color: 'rgba(48, 54, 61, 0.5)' },
-                    },
-                    crosshair: { mode: CrosshairMode.Normal },
-                    rightPriceScale: { borderColor: '#30363d' },
-                    timeScale: { borderColor: '#30363d', timeVisible: true },
-                });
-
-                const candleSeries = mainChart.addSeries(CandlestickSeries, {
-                    upColor: '#22c55e',
-                    downColor: '#ef4444',
-                    borderUpColor: '#22c55e',
-                    borderDownColor: '#ef4444',
-                    wickUpColor: '#22c55e',
-                    wickDownColor: '#ef4444',
-                });
-
-                const volumeSeries = mainChart.addSeries(HistogramSeries, {
-                    color: '#26a69a',
-                    priceFormat: { type: 'volume' },
-                    priceScaleId: 'volume',
-                });
-                mainChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-
-                // Create 4 dedicated line series for options levels
-                const supportSeries = mainChart.addSeries(LineSeries, {
-                    color: '#22c55e',
-                    lineWidth: 2,
-                    lineStyle: 0, // Solid
-                    priceLineVisible: false,
-                    lastValueVisible: true,
-                    title: 'Support',
-                });
-
-                const resistanceSeries = mainChart.addSeries(LineSeries, {
-                    color: '#ef4444',
-                    lineWidth: 2,
-                    lineStyle: 0, // Solid
-                    priceLineVisible: false,
-                    lastValueVisible: true,
-                    title: 'Resistance',
-                });
-
-                const gammaHighSeries = mainChart.addSeries(LineSeries, {
-                    color: '#00bcd4',
-                    lineWidth: 2,
-                    lineStyle: 2, // Dashed
-                    priceLineVisible: false,
-                    lastValueVisible: true,
-                    title: 'Γ High',
-                });
-
-                const gammaLowSeries = mainChart.addSeries(LineSeries, {
-                    color: '#f97316',
-                    lineWidth: 2,
-                    lineStyle: 2, // Dashed
-                    priceLineVisible: false,
-                    lastValueVisible: true,
-                    title: 'Γ Low',
-                });
-
-                // Create sub chart for oscillators
-                let subChart = null;
-                if (subChartRef.current) {
-                    subChart = createChart(subChartRef.current, {
-                        width: subChartRef.current.clientWidth,
-                        height: Math.floor(height * 0.2),
-                        layout: {
-                            background: { type: ColorType.Solid, color: '#0d1117' },
-                            textColor: '#9ca3af',
-                        },
-                        grid: {
-                            vertLines: { color: 'rgba(48, 54, 61, 0.3)' },
-                            horzLines: { color: 'rgba(48, 54, 61, 0.3)' },
-                        },
-                        crosshair: { mode: CrosshairMode.Normal },
-                        rightPriceScale: { borderColor: '#30363d' },
-                        timeScale: { visible: false },
-                    });
-                }
-
-                chartInstancesRef.current = {
-                    mainChart,
-                    subChart,
-                    candleSeries,
-                    volumeSeries,
-                    indicatorSeries: new Map(),
-                    levelSeries: {
-                        support: supportSeries,
-                        resistance: resistanceSeries,
-                        gammaHigh: gammaHighSeries,
-                        gammaLow: gammaLowSeries,
-                    },
-                };
-
-                chartsInitialized.current = true;
-
-                // Resize handler
-                const handleResize = () => {
-                    if (mainChartRef.current && chartInstancesRef.current) {
-                        chartInstancesRef.current.mainChart.applyOptions({ width: mainChartRef.current.clientWidth });
-                    }
-                    if (subChartRef.current && chartInstancesRef.current?.subChart) {
-                        chartInstancesRef.current.subChart.applyOptions({ width: subChartRef.current.clientWidth });
-                    }
-                };
-                window.addEventListener('resize', handleResize);
-
-                return () => {
-                    window.removeEventListener('resize', handleResize);
-                    mainChart.remove();
-                    subChart?.remove();
-                };
-            } catch (err) {
-                console.error('Chart init error:', err);
-                setError('Failed to initialize chart');
-            }
-        };
-
-        initCharts();
-    }, [height]);
-
-    // Fetch data on mount
     useEffect(() => {
         fetchData();
-        const timer = window.setInterval(fetchData, 15000);
-        return () => window.clearInterval(timer);
+        const timer = setInterval(fetchData, 60000); // 1 min refresh for candles
+        return () => clearInterval(timer);
     }, [fetchData]);
 
-    // Update chart with candle data
+    // 2. Initialize Chart
+    useEffect(() => {
+        if (!chartContainerRef.current) return;
+
+        const mainChart = createChart(chartContainerRef.current, {
+            layout: {
+                background: { type: ColorType.Solid, color: '#131722' },
+                textColor: '#d1d4dc',
+            },
+            grid: {
+                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+            },
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight,
+            crosshair: {
+                mode: CrosshairMode.Normal,
+            },
+            timeScale: {
+                borderColor: '#485c7b',
+                timeVisible: true, // Needed for intraday
+            },
+            rightPriceScale: {
+                borderColor: '#485c7b',
+            },
+        });
+
+        const candleSeries = mainChart.addCandlestickSeries({
+            upColor: '#26a69a',
+            downColor: '#ef5350',
+            borderVisible: false,
+            wickUpColor: '#26a69a',
+            wickDownColor: '#ef5350',
+        });
+
+        const volumeSeries = mainChart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: { type: 'volume' },
+            priceScaleId: '', // Overlay
+        });
+        volumeSeries.priceScale().applyOptions({
+            scaleMargins: { top: 0.8, bottom: 0 },
+        });
+
+        // Initialize Option Level Series (Lines)
+        const levels = {
+            support: mainChart.addLineSeries({ color: '#22c55e', lineWidth: 2, title: 'Support' }),
+            resistance: mainChart.addLineSeries({ color: '#ef4444', lineWidth: 2, title: 'Resistance' }),
+            gammaHigh: mainChart.addLineSeries({ color: '#00bcd4', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ High' }),
+            gammaLow: mainChart.addLineSeries({ color: '#f97316', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Γ Low' }),
+        };
+
+        chartInstancesRef.current = {
+            mainChart,
+            candleSeries,
+            volumeSeries,
+            levelSeries: levels,
+            indicatorSeriesMap: new Map(),
+        };
+
+        // Resize handler
+        const handleResize = () => {
+            if (chartContainerRef.current) {
+                mainChart.applyOptions({
+                    width: chartContainerRef.current.clientWidth,
+                    height: chartContainerRef.current.clientHeight
+                });
+                // Sync canvas size
+                if (overlayRef.current) {
+                    overlayRef.current.width = chartContainerRef.current.clientWidth;
+                    overlayRef.current.height = chartContainerRef.current.clientHeight;
+                    requestAnimationFrame(drawOverlay);
+                }
+            }
+        };
+        window.addEventListener('resize', handleResize);
+
+        // Map Click for Drawing
+        mainChart.subscribeClick((param) => {
+            if (!param.point || !param.time || activeTool === 'cursor') return;
+            handleDrawingClick(param.time as number, (param.seriesPrices.get(candleSeries) as any)?.close || param.point.y);
+            // Note: getting price from click is tricky in LW charts without exact coordinate conversion in event
+            // Using coordinate conversion below in handler
+        });
+
+        // Improve click handler using container events for precise coordinate->price mapping
+        // We handle this via the overlay div pointer events
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            mainChart.remove();
+        };
+    }, []);
+
+    // 3. Update Candle Data
     useEffect(() => {
         if (!chartInstancesRef.current || ohlcvData.length === 0) return;
-
         const { candleSeries, volumeSeries } = chartInstancesRef.current;
 
         candleSeries.setData(ohlcvData.map(d => ({
-            time: d.time,
-            open: d.open,
-            high: d.high,
-            low: d.low,
-            close: d.close,
+            time: d.time as Time,
+            open: d.open, high: d.high, low: d.low, close: d.close
         })));
 
         volumeSeries.setData(ohlcvData.map(d => ({
-            time: d.time,
+            time: d.time as Time,
             value: d.volume,
-            color: d.close >= d.open ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+            color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
         })));
     }, [ohlcvData]);
 
-    // Update options level line series with historical data
+    // 4. Update Level Lines (S/R)
     useEffect(() => {
-        if (!chartInstancesRef.current?.levelSeries || ohlcvData.length === 0) return;
-
+        if (!chartInstancesRef.current || ohlcvData.length === 0) return;
         const { levelSeries } = chartInstancesRef.current;
 
-        // If we have historical levels, map them to chart time and draw as lines
         if (levelsHistory.length > 0) {
-            // Get the time range of our candles
-            const candleStartTime = ohlcvData[0].time;
-            const candleEndTime = ohlcvData[ohlcvData.length - 1].time;
-
-            // Build line data by mapping level timestamps to candle times
-            // For each candle, find the closest level that was valid at that time
-            const supportData: { time: number; value: number }[] = [];
-            const resistanceData: { time: number; value: number }[] = [];
-            const gammaHighData: { time: number; value: number }[] = [];
-            const gammaLowData: { time: number; value: number }[] = [];
-
             // Sort levels by timestamp
             const sortedLevels = [...levelsHistory].sort((a, b) => a.timestamp - b.timestamp);
+            const supportData: LineData[] = [];
+            const resistanceData: LineData[] = [];
+            const ghData: LineData[] = [];
+            const glData: LineData[] = [];
 
-            // For each candle, find the applicable level (latest level before or at candle time)
+            // Map levels to candle times
             for (const candle of ohlcvData) {
-                // Find the latest level that applies to this candle
-                let applicableLevel: LevelHistoryPoint | null = null;
+                // Find latest level applicable to this candle
+                let level = sortedLevels[0];
                 for (let i = sortedLevels.length - 1; i >= 0; i--) {
-                    if (sortedLevels[i].timestamp <= candle.time) {
-                        applicableLevel = sortedLevels[i];
+                    if (sortedLevels[i].timestamp / 1000 <= candle.time) {
+                        level = sortedLevels[i];
                         break;
                     }
                 }
 
-                // If no level found before this candle, use the first available
-                if (!applicableLevel && sortedLevels.length > 0) {
-                    applicableLevel = sortedLevels[0];
-                }
-
-                if (applicableLevel) {
-                    supportData.push({ time: candle.time, value: applicableLevel.support });
-                    resistanceData.push({ time: candle.time, value: applicableLevel.resistance });
-                    gammaHighData.push({ time: candle.time, value: applicableLevel.gammaHigh });
-                    gammaLowData.push({ time: candle.time, value: applicableLevel.gammaLow });
+                if (level) {
+                    supportData.push({ time: candle.time as Time, value: level.support });
+                    resistanceData.push({ time: candle.time as Time, value: level.resistance });
+                    ghData.push({ time: candle.time as Time, value: level.gammaHigh });
+                    glData.push({ time: candle.time as Time, value: level.gammaLow });
                 }
             }
 
-            // Set data to each level series
-            if (supportData.length > 0) levelSeries.support.setData(supportData);
-            if (resistanceData.length > 0) levelSeries.resistance.setData(resistanceData);
-            if (gammaHighData.length > 0) levelSeries.gammaHigh.setData(gammaHighData);
-            if (gammaLowData.length > 0) levelSeries.gammaLow.setData(gammaLowData);
+            levelSeries.support.setData(supportData);
+            levelSeries.resistance.setData(resistanceData);
+            levelSeries.gammaHigh.setData(ghData);
+            levelSeries.gammaLow.setData(glData);
         }
     }, [ohlcvData, levelsHistory]);
 
-    // Calculate and update technical indicators
+    // 5. Update Indicators
     useEffect(() => {
         if (!chartInstancesRef.current || ohlcvData.length === 0) return;
+        const { mainChart, indicatorSeriesMap } = chartInstancesRef.current;
 
-        const updateIndicators = async () => {
-            const { LineSeries } = await import('lightweight-charts');
-            const { mainChart, subChart, indicatorSeries } = chartInstancesRef.current!;
+        // Add new indicators
+        activeIndicators.forEach(ind => {
+            if (!indicatorSeriesMap.has(ind.instanceId)) {
+                // Determine definition
+                const def = AVAILABLE_INDICATORS.find(d => d.id === ind.defId);
+                if (!def) return;
 
-            // Clear old indicators
-            indicatorSeries.forEach((series) => {
-                try { mainChart.removeSeries(series); } catch { }
-                try { subChart?.removeSeries(series); } catch { }
-            });
-            indicatorSeries.clear();
-
-            activeIndicators.forEach(type => {
-                const config = INDICATOR_OPTIONS.find(o => o.type === type);
-                if (!config) return;
-
-                let data: { time: number; value: number }[] = [];
-
-                if (type === 'sma') {
-                    const period = 20;
-                    for (let i = period - 1; i < ohlcvData.length; i++) {
-                        let sum = 0;
-                        for (let j = 0; j < period; j++) sum += ohlcvData[i - j].close;
-                        data.push({ time: ohlcvData[i].time, value: sum / period });
-                    }
-                    const series = mainChart.addSeries(LineSeries, { color: config.color, lineWidth: 2, priceLineVisible: false });
-                    series.setData(data);
-                    indicatorSeries.set(type, series);
+                // Create series
+                let series: ISeriesApi<"Line"> | ISeriesApi<"Histogram">;
+                if (def.type === 'histogram') {
+                    series = mainChart.addHistogramSeries({
+                        color: ind.color,
+                        priceFormat: { type: 'volume' },
+                        priceScaleId: 'indicators', // separate scale
+                    });
+                } else {
+                    series = mainChart.addLineSeries({
+                        color: ind.color,
+                        lineWidth: 2,
+                        title: def.name,
+                        // priceScaleId: 'indicators' // For now share scale or use overlay? 
+                        // Oscillators need own scale usually.
+                        priceScaleId: (def.category === 'Momentum' || def.category === 'Volume') ? 'indicators' : 'right'
+                    });
                 }
 
-                if (type === 'ema') {
-                    const period = 20;
-                    const multiplier = 2 / (period + 1);
-                    let ema = ohlcvData[0].close;
-                    for (let i = 0; i < ohlcvData.length; i++) {
-                        ema = (ohlcvData[i].close - ema) * multiplier + ema;
-                        if (i >= period - 1) data.push({ time: ohlcvData[i].time, value: ema });
-                    }
-                    const series = mainChart.addSeries(LineSeries, { color: config.color, lineWidth: 2, priceLineVisible: false });
-                    series.setData(data);
-                    indicatorSeries.set(type, series);
-                }
+                // Calculate data
+                const calculatedData = def.calculate(ohlcvData, ind.settings);
+                series.setData(calculatedData.map(d => ({ time: d.time as Time, value: d.value })));
 
-                if (type === 'vwap') {
-                    let cumVolume = 0, cumVwap = 0;
-                    for (let i = 0; i < ohlcvData.length; i++) {
-                        const typical = (ohlcvData[i].high + ohlcvData[i].low + ohlcvData[i].close) / 3;
-                        cumVolume += ohlcvData[i].volume;
-                        cumVwap += typical * ohlcvData[i].volume;
-                        data.push({ time: ohlcvData[i].time, value: cumVwap / cumVolume });
-                    }
-                    const series = mainChart.addSeries(LineSeries, { color: config.color, lineWidth: 2, priceLineVisible: false });
-                    series.setData(data);
-                    indicatorSeries.set(type, series);
-                }
+                indicatorSeriesMap.set(ind.instanceId, series);
+            }
+        });
 
-                if (type === 'rsi' && subChart) {
-                    const period = 14;
-                    const gains: number[] = [], losses: number[] = [];
-                    for (let i = 1; i < ohlcvData.length; i++) {
-                        const change = ohlcvData[i].close - ohlcvData[i - 1].close;
-                        gains.push(change > 0 ? change : 0);
-                        losses.push(change < 0 ? -change : 0);
-                    }
-                    let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
-                    let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-                    for (let i = period; i < gains.length; i++) {
-                        avgGain = (avgGain * (period - 1) + gains[i]) / period;
-                        avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
-                        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-                        data.push({ time: ohlcvData[i + 1].time, value: 100 - (100 / (1 + rs)) });
-                    }
-                    const series = subChart.addSeries(LineSeries, { color: config.color, lineWidth: 2, priceLineVisible: false });
-                    series.setData(data);
-                    series.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle: 2 });
-                    series.createPriceLine({ price: 30, color: '#22c55e', lineWidth: 1, lineStyle: 2 });
-                    indicatorSeries.set(type, series);
-                }
-            });
-        };
+        // Remove deleted indicators
+        // (Simplified: keeping it add-only for this demo or full re-sync logic would be better)
 
-        updateIndicators();
     }, [activeIndicators, ohlcvData]);
 
-    const toggleIndicator = (type: IndicatorType) => {
-        setActiveIndicators(prev =>
-            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-        );
-        setShowMenu(false);
+    // 6. Canvas Overlay Drawing Logic
+    const drawOverlay = useCallback(() => {
+        const canvas = overlayRef.current;
+        const chart = chartInstancesRef.current?.mainChart;
+        const series = chartInstancesRef.current?.candleSeries;
+
+        if (!canvas || !chart || !series) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Helper to convert time/price to coordinates
+        const toCoords = (time: number, price: number) => {
+            const x = chart.timeScale().timeToCoordinate(time as Time);
+            const y = series.priceToCoordinate(price);
+            return { x, y };
+        };
+
+        // Draw all saved drawings
+        [...drawings, ...(drawingStateRef.current.currentPoint ? [{
+            id: 'temp',
+            type: activeTool === 'fib' ? 'fib' : 'trendline',
+            p1: drawingStateRef.current.startPoint!,
+            p2: drawingStateRef.current.currentPoint,
+            color: '#fff'
+        } as Drawing] : [])].forEach(d => {
+            if (!d.p1 || !d.p2) return;
+            const start = toCoords(d.p1.time, d.p1.price);
+            const end = toCoords(d.p2.time, d.p2.price);
+
+            if (start.x === null || start.y === null || end.x === null || end.y === null) return;
+
+            ctx.beginPath();
+            ctx.strokeStyle = activeTool === 'fib' && d.id === 'temp' ? '#aaa' : d.color;
+            ctx.lineWidth = 2;
+
+            if (d.type === 'trendline') {
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.stroke();
+            } else if (d.type === 'fib') {
+                // Simple Fib Drawing (0, 0.5, 1)
+                const yDiff = end.y - start.y;
+                const width = Math.max(200, end.x - start.x + 100); // Extend right
+
+                const levels = [0, 0.382, 0.5, 0.618, 1];
+                levels.forEach(l => {
+                    const y = start.y + yDiff * l;
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, y);
+                    ctx.lineTo(start.x + width, y);
+                    ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l})`;
+                    ctx.stroke();
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText(`${l}`, start.x + 5, y - 2);
+                });
+
+                // Diagonal
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = '#666';
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+
+    }, [drawings, activeTool, ohlcvData]); // Redraw when data changes (zoom/pan updates coords via subscribeVisibleTimeRangeChange ideally)
+
+    // Hook up canvas redraw to chart updates
+    useEffect(() => {
+        const chart = chartInstancesRef.current?.mainChart;
+        if (!chart) return;
+
+        const sub = () => requestAnimationFrame(drawOverlay);
+        chart.timeScale().subscribeVisibleTimeRangeChange(sub);
+        chart.timeScale().subscribeVisibleLogicalRangeChange(sub);
+
+        return () => {
+            chart.timeScale().unsubscribeVisibleTimeRangeChange(sub);
+            chart.timeScale().unsubscribeVisibleLogicalRangeChange(sub);
+        };
+    }, [drawOverlay]);
+
+    // Handle container clicks for drawing (Coordinate mapping)
+    const handleContainerClick = (e: React.MouseEvent) => {
+        if (activeTool === 'cursor') return;
+
+        const chart = chartInstancesRef.current?.mainChart;
+        const series = chartInstancesRef.current?.candleSeries;
+        if (!chart || !series || !chartContainerRef.current) return;
+
+        const rect = chartContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Convert to time/price
+        // Note: coordinateToTime is not perfect for exact empty spaces, but works for snapped candles
+        const time = chart.timeScale().coordinateToTime(x) as number;
+        const price = series.coordinateToPrice(y);
+
+        if (!time || !price) return;
+
+        if (!drawingStateRef.current.isDrawing) {
+            // Start Drawing
+            drawingStateRef.current = {
+                isDrawing: true,
+                startPoint: { time, price },
+                currentPoint: { time, price }
+            };
+        } else {
+            // Finish Drawing
+            const newDrawing: Drawing = {
+                id: Date.now().toString(),
+                type: activeTool === 'fib' ? 'fib' : 'trendline',
+                p1: drawingStateRef.current.startPoint!,
+                p2: { time, price },
+                color: '#2962ff'
+            };
+            setDrawings(prev => [...prev, newDrawing]);
+            drawingStateRef.current = { isDrawing: false, startPoint: null, currentPoint: null };
+            setActiveTool('cursor'); // Reset to cursor
+        }
+        drawOverlay();
     };
 
-    if (error) {
-        return (
-            <div className="flex items-center justify-center h-full bg-[#0d1117] text-red-400">
-                <p>{error}</p>
-            </div>
-        );
-    }
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!drawingStateRef.current.isDrawing) return;
+
+        const chart = chartInstancesRef.current?.mainChart;
+        const series = chartInstancesRef.current?.candleSeries;
+        if (!chart || !series || !chartContainerRef.current) return;
+
+        const rect = chartContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const time = chart.timeScale().coordinateToTime(x) as number;
+        const price = series.coordinateToPrice(y);
+
+        if (time && price) {
+            drawingStateRef.current.currentPoint = { time, price };
+            drawOverlay(); // Redraw preview
+        }
+    };
+
+    const addIndicator = (defId: string) => {
+        setActiveIndicators(prev => [
+            ...prev,
+            {
+                instanceId: Date.now().toString(),
+                defId,
+                color: COLORS[prev.length % COLORS.length],
+                settings: {} // Use defaults
+            }
+        ]);
+        setIsIndicatorModalOpen(false);
+    };
+
+    if (loading) return <div className="flex items-center justify-center h-96 text-gray-400">Loading Chart Data...</div>;
 
     return (
-        <div className="flex flex-col h-full bg-[#0d1117] rounded-lg overflow-hidden">
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-[#30363d] bg-[#161b22]">
-                <span className="text-white font-bold">{symbol}</span>
-                {currentPrice && <span className="text-cyan-400 font-mono">${currentPrice.toLocaleString()}</span>}
+        <div className="relative w-full h-full flex flex-col bg-[#131722] overflow-hidden">
+            {/* Top Toolbar */}
+            <div className="h-12 border-b border-gray-800 flex items-center px-4 justify-between bg-[#1e222d] z-30">
+                <div className="flex items-center gap-4">
+                    <div className="text-gray-100 font-bold">{symbol} · {interval}</div>
+                    <div className="h-4 w-px bg-gray-700" />
 
-                <div className="w-px h-6 bg-[#30363d]" />
-
-                <div className="flex gap-1">
-                    {INTERVALS.map(i => (
-                        <button
-                            key={i.value}
-                            onClick={() => setInterval(i.value)}
-                            className={`px-2 py-1 text-xs rounded ${interval === i.value ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            {i.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="w-px h-6 bg-[#30363d]" />
-
-                <div className="relative">
                     <button
-                        onClick={() => setShowMenu(!showMenu)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs text-gray-300 bg-[#21262d] rounded hover:bg-[#30363d]"
+                        onClick={() => setIsIndicatorModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-[#2a2e39] text-gray-300 hover:text-blue-400 transition-colors"
                     >
-                        <Plus size={14} /> Indicators <ChevronDown size={12} />
+                        <Activity size={16} />
+                        <span className="text-sm">Indicators</span>
+                        <Plus size={14} className="ml-1 opacity-50" />
                     </button>
-                    {showMenu && (
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl z-50">
-                            {INDICATOR_OPTIONS.map(opt => (
-                                <button
-                                    key={opt.type}
-                                    onClick={() => toggleIndicator(opt.type)}
-                                    className={`w-full text-left px-3 py-2 text-sm ${activeIndicators.includes(opt.type) ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-400 hover:text-white hover:bg-[#21262d]'}`}
-                                >
-                                    {opt.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+
+                    {/* Active Indicators Chips */}
+                    <div className="flex gap-2 ml-4">
+                        {activeIndicators.map(ind => (
+                            <div key={ind.instanceId} className="flex items-center gap-1 px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs text-gray-300">
+                                <span style={{ color: ind.color }}>●</span>
+                                {AVAILABLE_INDICATORS.find(d => d.id === ind.defId)?.name}
+                                <X
+                                    size={12}
+                                    className="cursor-pointer hover:text-red-400 ml-1"
+                                    onClick={() => {
+                                        setActiveIndicators(prev => prev.filter(p => p.instanceId !== ind.instanceId));
+                                        // Also remove from chart
+                                        const series = chartInstancesRef.current?.indicatorSeriesMap.get(ind.instanceId);
+                                        if (series) {
+                                            chartInstancesRef.current?.mainChart.removeSeries(series);
+                                            chartInstancesRef.current?.indicatorSeriesMap.delete(ind.instanceId);
+                                        }
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Area */}
+            <div className="flex-1 relative flex">
+                {/* Left Toolbar */}
+                <div className="w-12 border-r border-gray-800 bg-[#1e222d] flex flex-col items-center py-4 z-20">
+                    <DrawingToolbar
+                        activeTool={activeTool}
+                        onSelectTool={setActiveTool}
+                        onClearAll={() => { setDrawings([]); drawOverlay(); }}
+                    />
                 </div>
 
-                <div className="flex-1" />
-
-                {/* Level indicators legend */}
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#22c55e]" />S</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#ef4444]" />R</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#00bcd4]" />ΓH</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#f97316]" />ΓL</span>
+                {/* Chart Container */}
+                <div className="flex-1 relative" ref={chartContainerRef} onClick={handleContainerClick} onMouseMove={handleMouseMove}>
+                    <canvas
+                        ref={overlayRef}
+                        className="absolute top-0 left-0 pointer-events-none z-10"
+                        width={100} height={100} // Resized by JS
+                    />
                 </div>
-
-                <div className="w-px h-6 bg-[#30363d]" />
-
-                {activeIndicators.map(type => (
-                    <div key={type} className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-cyan-500/20 text-cyan-400">
-                        {INDICATOR_OPTIONS.find(o => o.type === type)?.label}
-                        <button onClick={() => toggleIndicator(type)}><X size={12} /></button>
-                    </div>
-                ))}
-
-                <button onClick={fetchData} className={`p-1 text-gray-400 hover:text-white ${loading ? 'animate-spin' : ''}`}>
-                    <RefreshCw size={16} />
-                </button>
             </div>
 
-            {/* Main Chart */}
-            <div className="flex-1 relative">
-                {loading && ohlcvData.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117] z-10">
-                        <RefreshCw size={32} className="text-cyan-400 animate-spin" />
-                    </div>
-                )}
-                <div ref={mainChartRef} style={{ height: height * 0.65 }} />
-            </div>
-
-            {/* Sub Chart */}
-            <div className="border-t border-[#30363d]">
-                <div ref={subChartRef} style={{ height: height * 0.2 }} />
-            </div>
+            <IndicatorModal
+                isOpen={isIndicatorModalOpen}
+                onClose={() => setIsIndicatorModalOpen(false)}
+                onAddIndicator={addIndicator}
+                activeIndicators={activeIndicators.map(i => i.defId)}
+            />
         </div>
     );
-}
+};
+
+export default AdvancedChartNoSSR;
