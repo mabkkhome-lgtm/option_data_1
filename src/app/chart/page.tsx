@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
     ArrowLeft,
     TrendingUp,
@@ -13,7 +14,19 @@ import {
     Zap,
     Info
 } from 'lucide-react';
-import { AdvancedChart } from '@/components/chart/AdvancedChart';
+
+// Dynamic import with SSR disabled - lightweight-charts requires browser APIs
+const AdvancedChart = dynamic(
+    () => import('@/components/chart/AdvancedChart').then(mod => mod.AdvancedChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center h-full bg-[#0d1117]">
+                <RefreshCw size={32} className="text-cyan-400 animate-spin" />
+            </div>
+        )
+    }
+);
 
 interface MarketLevel {
     id: number;
