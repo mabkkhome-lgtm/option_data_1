@@ -213,7 +213,7 @@ export async function GET() {
 
         // Save to DB
         if (supabase) {
-            await supabase.from('market_levels').insert({
+            const { error: insertError } = await supabase.from('market_levels').insert({
                 timestamp: now.toISOString(),
                 expiry_date: expiryTarget,
                 current_price: spot,
@@ -223,6 +223,14 @@ export async function GET() {
                 resistance_price: resistance,
                 window_start: userMidnight.toISOString()
             });
+
+            if (insertError) {
+                console.error('[Cron] DB Insert Error:', insertError);
+            } else {
+                console.log('[Cron] Successfully saved to DB');
+            }
+        } else {
+            console.error('[Cron] Supabase not configured!');
         }
 
         return NextResponse.json({
