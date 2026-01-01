@@ -9,32 +9,39 @@ export async function GET() {
     }
 
     try {
-        // Get most recent 20 records (regardless of date)
-        const { data: recentData, error: recentError } = await supabase
+        // Get last 500 records
+        const { data, error } = await supabase
             .from('market_levels')
             .select('timestamp, support_price, resistance_price, gamma_high_price, gamma_low_price')
             .order('timestamp', { ascending: false })
-            .limit(20);
+            .limit(500);
 
-        if (recentError) {
-            return NextResponse.json({ error: recentError.message }, { status: 500 });
+        if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Calculate which are valid
-        const validRecent = recentData?.filter(d =>
-            Math.abs(d.support_price - d.resistance_price) > 100
-        ) || [];
+        // Analyze the data
+        const records = data?.map(r => ({
+            time: r.timestamp,
+            S: Math.round(r.support_price),
+            R: Math.round(r.resistance_price),
+            GH: Math.round(r.gamma_high_price),
+            GL: Math.round(r.gamma_low_price),
+            diff: Math.round(Math.abs(r.support_price - r.resistance_price)),
+            valid: Math.abs(r.support_price - r.resistance_price) > 100
+        })) || [];
+
+        const validCount = records.filter(r => r.valid).length;
+        const invalidCount = records.filter(r => !r.valid).length;
 
         return NextResponse.json({
-            totalRecentRecords: recentData?.length || 0,
-            validRecentRecords: validRecent.length,
-            mostRecent: recentData?.slice(0, 10).map(r => ({
-                time: r.timestamp,
-                S: Math.round(r.support_price),
-                R: Math.round(r.resistance_price),
-                diff: Math.round(Math.abs(r.support_price - r.resistance_price)),
-                valid: Math.abs(r.support_price - r.resistance_price) > 100
-            }))
+            totalRecords: records.length,
+            validRecords: validCount,
+            invalidRecords: invalidCount,
+            oldestRecord: records[records.length - 1]?.time,
+            newestRecord: records[0]?.time,
+            // All records for analysis
+            allRecords: records
         });
     } catch (err) {
         return NextResponse.json({ error: String(err) }, { status: 500 });
