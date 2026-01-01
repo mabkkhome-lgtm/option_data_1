@@ -60,42 +60,50 @@ export default function ChartPage() {
         if (!supabase) return;
 
         try {
-            // 1. Trigger the calculation - this inserts fresh data
-            await fetch('/api/cron/market-levels');
+            // 1. Trigger the calculation and get the result directly
+            const apiResponse = await fetch('/api/cron/market-levels');
+            const apiData = await apiResponse.json();
 
-            // 2. Wait a moment for the insert to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // 2. Use API result directly for sidebar (always fresh and correct)
+            if (apiData.success && apiData.data) {
+                const { support, resistance, gammaHighPrice, gammaLowPrice } = apiData.data;
+                const spot = apiData.stats?.spot || 88000;
 
-            // 3. Calculate 7 days ago for historical data
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                // Only use if S != R (valid calculation)
+                if (Math.abs(support - resistance) > 100) {
+                    setLevels({
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        expiry_date: apiData.data.expiry || '',
+                        current_price: spot,
+                        gamma_high_price: gammaHighPrice,
+                        gamma_low_price: gammaLowPrice,
+                        support_price: support,
+                        resistance_price: resistance,
+                    });
+                }
+            }
 
-            // 4. Fetch historical records (up to 500 over last 7 days)
+            // 3. Fetch valid historical records for chart lines
             const { data, error } = await supabase
                 .from('market_levels')
                 .select('*')
-                .gte('timestamp', sevenDaysAgo)
-                .order('timestamp', { ascending: true })
-                .limit(500);
+                .order('timestamp', { ascending: false })
+                .limit(200);
 
-            if (error) throw error;
-            if (data && data.length > 0) {
-                // Filter for valid records (support != resistance, at least $100 difference)
+            if (!error && data && data.length > 0) {
+                // Filter for valid records only (S != R)
                 const validRecords = data.filter(d =>
                     Math.abs(d.support_price - d.resistance_price) > 100
                 );
 
                 if (validRecords.length > 0) {
-                    // Use ALL valid records for history to show level changes over time
-                    setLevelsHistory(validRecords);
-
-                    // Use latest valid record for sidebar display
-                    setLevels(validRecords[validRecords.length - 1]);
-                } else if (data.length > 0) {
-                    // Fallback to most recent even if potentially invalid
-                    setLevels(data[data.length - 1]);
+                    // Reverse to ascending order for chart
+                    setLevelsHistory(validRecords.reverse());
                 }
-                setLastUpdate(new Date());
             }
+
+            setLastUpdate(new Date());
             setLoading(false);
         } catch (err) {
             console.error('Failed to fetch levels:', err);
