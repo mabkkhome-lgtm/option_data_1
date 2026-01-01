@@ -1,41 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import {
-    createChart,
-    IChartApi,
-    ISeriesApi,
-    CandlestickData,
-    LineData,
-    HistogramData,
-    ColorType,
-    CrosshairMode,
-    Time,
-    CandlestickSeries,
-    LineSeries,
-    HistogramSeries
-} from 'lightweight-charts';
-import {
-    OHLCV,
-    calculateSMA,
-    calculateEMA,
-    calculateRSI,
-    calculateMACD,
-    calculateBollingerBands,
-    calculateVWAPBands,
-    calculateATR,
-    calculateStochastic,
-    calculateParabolicSAR,
-    calculateSupertrend,
-    IndicatorType,
-    DEFAULT_INDICATOR_CONFIGS
-} from '@/lib/indicators/technicalIndicators';
-import {
-    Plus,
-    X,
-    ChevronDown,
-    RefreshCw
-} from 'lucide-react';
+import { Plus, X, ChevronDown, RefreshCw } from 'lucide-react';
+
+// Types for OHLCV data
+interface OHLCV {
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+}
+
+// Indicator types
+type IndicatorType = 'sma' | 'ema' | 'rsi' | 'macd' | 'bb' | 'vwap' | 'atr' | 'stochastic' | 'psar' | 'supertrend';
 
 interface AdvancedChartProps {
     symbol?: string;
@@ -68,38 +47,37 @@ const INTERVALS = [
 ];
 
 const INDICATOR_CATEGORIES = {
-    'Moving Averages': ['sma', 'ema', 'wma', 'hma'] as IndicatorType[],
-    'Momentum': ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'roc', 'momentum', 'mfi'] as IndicatorType[],
-    'Volatility': ['bb', 'atr', 'keltner', 'donchian'] as IndicatorType[],
-    'Volume': ['vwap', 'obv', 'adl', 'cmf'] as IndicatorType[],
-    'Trend': ['adx', 'psar', 'supertrend', 'ichimoku'] as IndicatorType[],
+    'Moving Averages': ['sma', 'ema'] as IndicatorType[],
+    'Momentum': ['rsi', 'macd', 'stochastic'] as IndicatorType[],
+    'Volatility': ['bb', 'atr'] as IndicatorType[],
+    'Volume': ['vwap'] as IndicatorType[],
+    'Trend': ['psar', 'supertrend'] as IndicatorType[],
 };
 
 const INDICATOR_LABELS: Record<IndicatorType, string> = {
     sma: 'SMA',
     ema: 'EMA',
-    wma: 'WMA',
-    hma: 'Hull MA',
     rsi: 'RSI',
     macd: 'MACD',
     stochastic: 'Stochastic',
-    cci: 'CCI',
-    williamsR: 'Williams %R',
-    roc: 'Rate of Change',
-    momentum: 'Momentum',
     bb: 'Bollinger Bands',
     atr: 'ATR',
-    keltner: 'Keltner Channels',
-    donchian: 'Donchian Channels',
     vwap: 'VWAP',
-    obv: 'On-Balance Volume',
-    adl: 'A/D Line',
-    mfi: 'Money Flow Index',
-    cmf: 'Chaikin MF',
-    adx: 'ADX',
     psar: 'Parabolic SAR',
-    ichimoku: 'Ichimoku Cloud',
     supertrend: 'Supertrend'
+};
+
+const DEFAULT_COLORS: Record<IndicatorType, string> = {
+    sma: '#2962ff',
+    ema: '#ff6b6b',
+    rsi: '#9c27b0',
+    macd: '#00bfff',
+    stochastic: '#ff9800',
+    bb: '#e91e63',
+    atr: '#4caf50',
+    vwap: '#00bcd4',
+    psar: '#ffeb3b',
+    supertrend: '#26a69a'
 };
 
 export function AdvancedChart({
@@ -110,11 +88,12 @@ export function AdvancedChart({
 }: AdvancedChartProps) {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const subChartContainerRef = useRef<HTMLDivElement>(null);
-    const chartRef = useRef<IChartApi | null>(null);
-    const subChartRef = useRef<IChartApi | null>(null);
-    const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-    const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-    const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'> | ISeriesApi<'Line'>[] | ISeriesApi<'Histogram'>>>(new Map());
+    const chartRef = useRef<any>(null);
+    const subChartRef = useRef<any>(null);
+    const candleSeriesRef = useRef<any>(null);
+    const volumeSeriesRef = useRef<any>(null);
+    const indicatorSeriesRef = useRef<Map<string, any>>(new Map());
+    const priceLineRefs = useRef<any[]>([]);
 
     const [interval, setIntervalState] = useState(initialInterval);
     const [ohlcvData, setOhlcvData] = useState<OHLCV[]>([]);
@@ -123,6 +102,7 @@ export function AdvancedChart({
     const [activeIndicators, setActiveIndicators] = useState<ActiveIndicator[]>([]);
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
     const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+    const [chartLoaded, setChartLoaded] = useState(false);
 
     // Fetch candlestick data from Binance
     const fetchCandles = useCallback(async () => {
@@ -152,141 +132,155 @@ export function AdvancedChart({
         setLoading(false);
     }, [symbol, interval]);
 
-    // Initialize main chart
+    // Initialize charts with dynamic import
     useEffect(() => {
         if (!chartContainerRef.current) return;
 
-        const chart = createChart(chartContainerRef.current, {
-            layout: {
-                background: { type: ColorType.Solid, color: '#0d1117' },
-                textColor: '#9ca3af',
-            },
-            grid: {
-                vertLines: { color: 'rgba(48, 54, 61, 0.5)' },
-                horzLines: { color: 'rgba(48, 54, 61, 0.5)' },
-            },
-            crosshair: {
-                mode: CrosshairMode.Normal,
-                vertLine: {
-                    color: 'rgba(88, 166, 255, 0.5)',
-                    width: 1,
-                    style: 2,
-                    labelBackgroundColor: '#58a6ff',
-                },
-                horzLine: {
-                    color: 'rgba(88, 166, 255, 0.5)',
-                    width: 1,
-                    style: 2,
-                    labelBackgroundColor: '#58a6ff',
-                },
-            },
-            rightPriceScale: {
-                borderColor: '#30363d',
-                scaleMargins: { top: 0.1, bottom: 0.2 },
-            },
-            timeScale: {
-                borderColor: '#30363d',
-                timeVisible: true,
-                secondsVisible: false,
-            },
-        });
+        let isMounted = true;
 
-        // Candlestick series - using v5 API with SeriesDefinition
-        const candleSeries = chart.addSeries(CandlestickSeries, {
-            upColor: '#22c55e',
-            downColor: '#ef4444',
-            borderUpColor: '#22c55e',
-            borderDownColor: '#ef4444',
-            wickUpColor: '#22c55e',
-            wickDownColor: '#ef4444',
-        });
+        const initChart = async () => {
+            try {
+                // Dynamic import of lightweight-charts
+                const lc = await import('lightweight-charts');
 
-        // Volume series
-        const volumeSeries = chart.addSeries(HistogramSeries, {
-            color: '#26a69a',
-            priceFormat: { type: 'volume' },
-            priceScaleId: 'volume',
-        });
+                if (!isMounted || !chartContainerRef.current) return;
 
-        chart.priceScale('volume').applyOptions({
-            scaleMargins: { top: 0.85, bottom: 0 },
-        });
-
-        chartRef.current = chart;
-        candleSeriesRef.current = candleSeries;
-        volumeSeriesRef.current = volumeSeries;
-
-        // Handle resize
-        const handleResize = () => {
-            if (chartContainerRef.current) {
-                chart.applyOptions({
-                    width: chartContainerRef.current.clientWidth,
-                    height: height * 0.7,
+                const chart = lc.createChart(chartContainerRef.current, {
+                    layout: {
+                        background: { type: lc.ColorType.Solid, color: '#0d1117' },
+                        textColor: '#9ca3af',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(48, 54, 61, 0.5)' },
+                        horzLines: { color: 'rgba(48, 54, 61, 0.5)' },
+                    },
+                    crosshair: {
+                        mode: lc.CrosshairMode.Normal,
+                        vertLine: {
+                            color: 'rgba(88, 166, 255, 0.5)',
+                            width: 1,
+                            style: 2,
+                            labelBackgroundColor: '#58a6ff',
+                        },
+                        horzLine: {
+                            color: 'rgba(88, 166, 255, 0.5)',
+                            width: 1,
+                            style: 2,
+                            labelBackgroundColor: '#58a6ff',
+                        },
+                    },
+                    rightPriceScale: {
+                        borderColor: '#30363d',
+                        scaleMargins: { top: 0.1, bottom: 0.2 },
+                    },
+                    timeScale: {
+                        borderColor: '#30363d',
+                        timeVisible: true,
+                        secondsVisible: false,
+                    },
                 });
-            }
-        };
 
-        window.addEventListener('resize', handleResize);
-        handleResize();
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            chart.remove();
-        };
-    }, [height]);
-
-    // Initialize sub-chart for oscillators
-    useEffect(() => {
-        if (!subChartContainerRef.current) return;
-
-        const subChart = createChart(subChartContainerRef.current, {
-            layout: {
-                background: { type: ColorType.Solid, color: '#0d1117' },
-                textColor: '#9ca3af',
-            },
-            grid: {
-                vertLines: { color: 'rgba(48, 54, 61, 0.3)' },
-                horzLines: { color: 'rgba(48, 54, 61, 0.3)' },
-            },
-            crosshair: { mode: CrosshairMode.Normal },
-            rightPriceScale: {
-                borderColor: '#30363d',
-                scaleMargins: { top: 0.1, bottom: 0.1 },
-            },
-            timeScale: {
-                visible: false,
-            },
-        });
-
-        subChartRef.current = subChart;
-
-        const handleResize = () => {
-            if (subChartContainerRef.current) {
-                subChart.applyOptions({
-                    width: subChartContainerRef.current.clientWidth,
-                    height: height * 0.25,
+                // Candlestick series
+                const candleSeries = chart.addSeries(lc.CandlestickSeries, {
+                    upColor: '#22c55e',
+                    downColor: '#ef4444',
+                    borderUpColor: '#22c55e',
+                    borderDownColor: '#ef4444',
+                    wickUpColor: '#22c55e',
+                    wickDownColor: '#ef4444',
                 });
-            }
-        };
 
-        window.addEventListener('resize', handleResize);
-        handleResize();
+                // Volume series
+                const volumeSeries = chart.addSeries(lc.HistogramSeries, {
+                    color: '#26a69a',
+                    priceFormat: { type: 'volume' },
+                    priceScaleId: 'volume',
+                });
 
-        // Sync time scales
-        if (chartRef.current) {
-            chartRef.current.timeScale().subscribeVisibleTimeRangeChange(() => {
-                if (chartRef.current && subChartRef.current) {
-                    const timeRange = chartRef.current.timeScale().getVisibleRange();
-                    if (timeRange) {
-                        subChartRef.current.timeScale().setVisibleRange(timeRange);
+                chart.priceScale('volume').applyOptions({
+                    scaleMargins: { top: 0.85, bottom: 0 },
+                });
+
+                chartRef.current = chart;
+                candleSeriesRef.current = candleSeries;
+                volumeSeriesRef.current = volumeSeries;
+
+                // Handle resize
+                const handleResize = () => {
+                    if (chartContainerRef.current && chart) {
+                        chart.applyOptions({
+                            width: chartContainerRef.current.clientWidth,
+                            height: height * 0.7,
+                        });
                     }
+                };
+
+                window.addEventListener('resize', handleResize);
+                handleResize();
+
+                // Initialize sub-chart for oscillators
+                if (subChartContainerRef.current) {
+                    const subChart = lc.createChart(subChartContainerRef.current, {
+                        layout: {
+                            background: { type: lc.ColorType.Solid, color: '#0d1117' },
+                            textColor: '#9ca3af',
+                        },
+                        grid: {
+                            vertLines: { color: 'rgba(48, 54, 61, 0.3)' },
+                            horzLines: { color: 'rgba(48, 54, 61, 0.3)' },
+                        },
+                        crosshair: { mode: lc.CrosshairMode.Normal },
+                        rightPriceScale: {
+                            borderColor: '#30363d',
+                            scaleMargins: { top: 0.1, bottom: 0.1 },
+                        },
+                        timeScale: {
+                            visible: false,
+                        },
+                    });
+
+                    subChartRef.current = subChart;
+
+                    const handleSubResize = () => {
+                        if (subChartContainerRef.current && subChart) {
+                            subChart.applyOptions({
+                                width: subChartContainerRef.current.clientWidth,
+                                height: height * 0.25,
+                            });
+                        }
+                    };
+
+                    window.addEventListener('resize', handleSubResize);
+                    handleSubResize();
+
+                    // Sync time scales
+                    chart.timeScale().subscribeVisibleTimeRangeChange(() => {
+                        if (chart && subChart) {
+                            const timeRange = chart.timeScale().getVisibleRange();
+                            if (timeRange) {
+                                subChart.timeScale().setVisibleRange(timeRange);
+                            }
+                        }
+                    });
                 }
-            });
-        }
+
+                setChartLoaded(true);
+
+            } catch (error) {
+                console.error('Failed to initialize chart:', error);
+            }
+        };
+
+        initChart();
 
         return () => {
-            window.removeEventListener('resize', handleResize);
-            subChart.remove();
+            isMounted = false;
+            if (chartRef.current) {
+                chartRef.current.remove();
+            }
+            if (subChartRef.current) {
+                subChartRef.current.remove();
+            }
         };
     }, [height]);
 
@@ -299,18 +293,18 @@ export function AdvancedChart({
 
     // Update chart with data
     useEffect(() => {
-        if (!candleSeriesRef.current || !volumeSeriesRef.current || ohlcvData.length === 0) return;
+        if (!candleSeriesRef.current || !volumeSeriesRef.current || ohlcvData.length === 0 || !chartLoaded) return;
 
-        const candleData: CandlestickData<Time>[] = ohlcvData.map(d => ({
-            time: d.time as Time,
+        const candleData = ohlcvData.map(d => ({
+            time: d.time,
             open: d.open,
             high: d.high,
             low: d.low,
             close: d.close,
         }));
 
-        const volumeData: HistogramData<Time>[] = ohlcvData.map(d => ({
-            time: d.time as Time,
+        const volumeData = ohlcvData.map(d => ({
+            time: d.time,
             value: d.volume,
             color: d.close >= d.open ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
         }));
@@ -318,12 +312,20 @@ export function AdvancedChart({
         candleSeriesRef.current.setData(candleData);
         volumeSeriesRef.current.setData(volumeData);
 
+        // Clear previous price lines
+        priceLineRefs.current.forEach(line => {
+            try {
+                candleSeriesRef.current?.removePriceLine(line);
+            } catch (e) { }
+        });
+        priceLineRefs.current = [];
+
         // Add options levels as price lines
         if (optionsLevels && candleSeriesRef.current) {
             const series = candleSeriesRef.current;
 
             if (optionsLevels.support) {
-                series.createPriceLine({
+                const line = series.createPriceLine({
                     price: optionsLevels.support,
                     color: '#22c55e',
                     lineWidth: 2,
@@ -331,9 +333,10 @@ export function AdvancedChart({
                     axisLabelVisible: true,
                     title: 'Support',
                 });
+                priceLineRefs.current.push(line);
             }
             if (optionsLevels.resistance) {
-                series.createPriceLine({
+                const line = series.createPriceLine({
                     price: optionsLevels.resistance,
                     color: '#ef4444',
                     lineWidth: 2,
@@ -341,9 +344,10 @@ export function AdvancedChart({
                     axisLabelVisible: true,
                     title: 'Resistance',
                 });
+                priceLineRefs.current.push(line);
             }
             if (optionsLevels.gammaHigh) {
-                series.createPriceLine({
+                const line = series.createPriceLine({
                     price: optionsLevels.gammaHigh,
                     color: '#a855f7',
                     lineWidth: 1,
@@ -351,9 +355,10 @@ export function AdvancedChart({
                     axisLabelVisible: true,
                     title: 'Γ High',
                 });
+                priceLineRefs.current.push(line);
             }
             if (optionsLevels.gammaLow) {
-                series.createPriceLine({
+                const line = series.createPriceLine({
                     price: optionsLevels.gammaLow,
                     color: '#f97316',
                     lineWidth: 1,
@@ -361,356 +366,173 @@ export function AdvancedChart({
                     axisLabelVisible: true,
                     title: 'Γ Low',
                 });
+                priceLineRefs.current.push(line);
             }
         }
-    }, [ohlcvData, optionsLevels]);
+    }, [ohlcvData, optionsLevels, chartLoaded]);
 
-    // Update indicators when data or indicators change
-    useEffect(() => {
-        if (!chartRef.current || !subChartRef.current || ohlcvData.length === 0) return;
-
-        activeIndicators.forEach(indicator => {
-            if (!indicator.visible) return;
-
-            // Check if series already exists
-            const existingSeries = indicatorSeriesRef.current.get(indicator.id);
-
-            try {
-                switch (indicator.type) {
-                    case 'sma': {
-                        const smaData = calculateSMA(ohlcvData, indicator.params.period || 20);
-                        const lineData: LineData<Time>[] = smaData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'ema': {
-                        const emaData = calculateEMA(ohlcvData, indicator.params.period || 20);
-                        const lineData: LineData<Time>[] = emaData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'rsi': {
-                        const rsiData = calculateRSI(ohlcvData, indicator.params.period || 14);
-                        const lineData: LineData<Time>[] = rsiData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = subChartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-
-                            // Add overbought/oversold lines
-                            series.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                            series.createPriceLine({ price: 30, color: '#22c55e', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'macd': {
-                        const macdData = calculateMACD(
-                            ohlcvData,
-                            indicator.params.fast || 12,
-                            indicator.params.slow || 26,
-                            indicator.params.signal || 9
-                        );
-
-                        const macdLine: LineData<Time>[] = macdData.map(d => ({
-                            time: d.time as Time,
-                            value: d.macd,
-                        }));
-                        const signalLine: LineData<Time>[] = macdData.map(d => ({
-                            time: d.time as Time,
-                            value: d.signal,
-                        }));
-                        const histogram: HistogramData<Time>[] = macdData.map(d => ({
-                            time: d.time as Time,
-                            value: d.histogram,
-                            color: d.histogram >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
-                        }));
-
-                        if (!existingSeries) {
-                            const histSeries = subChartRef.current!.addSeries(HistogramSeries, {
-                                priceLineVisible: false,
-                            });
-                            histSeries.setData(histogram);
-
-                            const macdSeries = subChartRef.current!.addSeries(LineSeries, {
-                                color: '#00bfff',
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            macdSeries.setData(macdLine);
-
-                            const sigSeries = subChartRef.current!.addSeries(LineSeries, {
-                                color: '#ff6b6b',
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            sigSeries.setData(signalLine);
-
-                            indicatorSeriesRef.current.set(indicator.id, [histSeries, macdSeries, sigSeries] as any);
-                        }
-                        break;
-                    }
-
-                    case 'bb': {
-                        const bbData = calculateBollingerBands(
-                            ohlcvData,
-                            indicator.params.period || 20,
-                            indicator.params.stdDev || 2
-                        );
-
-                        const upperLine: LineData<Time>[] = bbData.map(d => ({
-                            time: d.time as Time,
-                            value: d.upper,
-                        }));
-                        const middleLine: LineData<Time>[] = bbData.map(d => ({
-                            time: d.time as Time,
-                            value: d.middle,
-                        }));
-                        const lowerLine: LineData<Time>[] = bbData.map(d => ({
-                            time: d.time as Time,
-                            value: d.lower,
-                        }));
-
-                        if (!existingSeries) {
-                            const upperSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                priceLineVisible: false,
-                            });
-                            upperSeries.setData(upperLine);
-
-                            const middleSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                lineStyle: 2,
-                                priceLineVisible: false,
-                            });
-                            middleSeries.setData(middleLine);
-
-                            const lowerSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                priceLineVisible: false,
-                            });
-                            lowerSeries.setData(lowerLine);
-
-                            indicatorSeriesRef.current.set(indicator.id, [upperSeries, middleSeries, lowerSeries] as any);
-                        }
-                        break;
-                    }
-
-                    case 'vwap': {
-                        const vwapResult = calculateVWAPBands(ohlcvData, 2);
-                        const vwapLine: LineData<Time>[] = vwapResult.vwap.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-                        const upperLine: LineData<Time>[] = vwapResult.upper.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-                        const lowerLine: LineData<Time>[] = vwapResult.lower.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const vwapSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            vwapSeries.setData(vwapLine);
-
-                            const upperSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                lineStyle: 2,
-                                priceLineVisible: false,
-                            });
-                            upperSeries.setData(upperLine);
-
-                            const lowerSeries = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                lineStyle: 2,
-                                priceLineVisible: false,
-                            });
-                            lowerSeries.setData(lowerLine);
-
-                            indicatorSeriesRef.current.set(indicator.id, [vwapSeries, upperSeries, lowerSeries] as any);
-                        }
-                        break;
-                    }
-
-                    case 'atr': {
-                        const atrData = calculateATR(ohlcvData, indicator.params.period || 14);
-                        const lineData: LineData<Time>[] = atrData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = subChartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'supertrend': {
-                        const stData = calculateSupertrend(
-                            ohlcvData,
-                            indicator.params.period || 10,
-                            indicator.params.mult || 3
-                        );
-                        const lineData: LineData<Time>[] = stData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'psar': {
-                        const psarData = calculateParabolicSAR(
-                            ohlcvData,
-                            indicator.params.step || 0.02,
-                            indicator.params.max || 0.2
-                        );
-                        const lineData: LineData<Time>[] = psarData.map(d => ({
-                            time: d.time as Time,
-                            value: d.value,
-                        }));
-
-                        if (!existingSeries) {
-                            const series = chartRef.current!.addSeries(LineSeries, {
-                                color: indicator.color,
-                                lineWidth: 1,
-                                lineVisible: false,
-                                pointMarkersVisible: true,
-                                pointMarkersRadius: 2,
-                                priceLineVisible: false,
-                            });
-                            series.setData(lineData);
-                            indicatorSeriesRef.current.set(indicator.id, series);
-                        } else {
-                            (existingSeries as ISeriesApi<'Line'>).setData(lineData);
-                        }
-                        break;
-                    }
-
-                    case 'stochastic': {
-                        const stochData = calculateStochastic(
-                            ohlcvData,
-                            indicator.params.k || 14,
-                            indicator.params.d || 3
-                        );
-                        const kLine: LineData<Time>[] = stochData.map(d => ({
-                            time: d.time as Time,
-                            value: d.k,
-                        }));
-                        const dLine: LineData<Time>[] = stochData.map(d => ({
-                            time: d.time as Time,
-                            value: d.d,
-                        }));
-
-                        if (!existingSeries) {
-                            const kSeries = subChartRef.current!.addSeries(LineSeries, {
-                                color: '#00bfff',
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            kSeries.setData(kLine);
-
-                            const dSeries = subChartRef.current!.addSeries(LineSeries, {
-                                color: '#ff6b6b',
-                                lineWidth: 2,
-                                priceLineVisible: false,
-                            });
-                            dSeries.setData(dLine);
-
-                            // Add overbought/oversold lines
-                            kSeries.createPriceLine({ price: 80, color: '#ef4444', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                            kSeries.createPriceLine({ price: 20, color: '#22c55e', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-
-                            indicatorSeriesRef.current.set(indicator.id, [kSeries, dSeries] as any);
-                        }
-                        break;
-                    }
-                }
-            } catch (error) {
-                console.error(`Error calculating ${indicator.type}:`, error);
+    // Calculate SMA
+    const calculateSMA = (data: OHLCV[], period: number) => {
+        const result = [];
+        for (let i = period - 1; i < data.length; i++) {
+            let sum = 0;
+            for (let j = 0; j < period; j++) {
+                sum += data[i - j].close;
             }
-        });
-    }, [activeIndicators, ohlcvData]);
+            result.push({ time: data[i].time, value: sum / period });
+        }
+        return result;
+    };
+
+    // Calculate EMA
+    const calculateEMA = (data: OHLCV[], period: number) => {
+        const result = [];
+        const multiplier = 2 / (period + 1);
+        let ema = data[0].close;
+
+        for (let i = 0; i < data.length; i++) {
+            ema = (data[i].close - ema) * multiplier + ema;
+            if (i >= period - 1) {
+                result.push({ time: data[i].time, value: ema });
+            }
+        }
+        return result;
+    };
+
+    // Calculate RSI
+    const calculateRSI = (data: OHLCV[], period: number = 14) => {
+        const result = [];
+        const gains = [];
+        const losses = [];
+
+        for (let i = 1; i < data.length; i++) {
+            const change = data[i].close - data[i - 1].close;
+            gains.push(change > 0 ? change : 0);
+            losses.push(change < 0 ? -change : 0);
+        }
+
+        let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
+        let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
+
+        for (let i = period; i < gains.length; i++) {
+            avgGain = (avgGain * (period - 1) + gains[i]) / period;
+            avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+            const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            const rsi = 100 - (100 / (1 + rs));
+            result.push({ time: data[i + 1].time, value: rsi });
+        }
+        return result;
+    };
+
+    // Calculate VWAP
+    const calculateVWAP = (data: OHLCV[]) => {
+        const result = [];
+        let cumVolume = 0;
+        let cumVwap = 0;
+
+        for (let i = 0; i < data.length; i++) {
+            const typical = (data[i].high + data[i].low + data[i].close) / 3;
+            cumVolume += data[i].volume;
+            cumVwap += typical * data[i].volume;
+            result.push({ time: data[i].time, value: cumVwap / cumVolume });
+        }
+        return result;
+    };
+
+    // Update indicators
+    useEffect(() => {
+        if (!chartRef.current || !chartLoaded || ohlcvData.length === 0) return;
+
+        const updateIndicators = async () => {
+            const lc = await import('lightweight-charts');
+
+            activeIndicators.forEach(indicator => {
+                if (!indicator.visible) return;
+
+                const existingSeries = indicatorSeriesRef.current.get(indicator.id);
+
+                try {
+                    switch (indicator.type) {
+                        case 'sma': {
+                            const data = calculateSMA(ohlcvData, indicator.params.period || 20);
+                            if (!existingSeries) {
+                                const series = chartRef.current.addSeries(lc.LineSeries, {
+                                    color: indicator.color,
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                });
+                                series.setData(data);
+                                indicatorSeriesRef.current.set(indicator.id, series);
+                            } else {
+                                existingSeries.setData(data);
+                            }
+                            break;
+                        }
+                        case 'ema': {
+                            const data = calculateEMA(ohlcvData, indicator.params.period || 20);
+                            if (!existingSeries) {
+                                const series = chartRef.current.addSeries(lc.LineSeries, {
+                                    color: indicator.color,
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                });
+                                series.setData(data);
+                                indicatorSeriesRef.current.set(indicator.id, series);
+                            } else {
+                                existingSeries.setData(data);
+                            }
+                            break;
+                        }
+                        case 'vwap': {
+                            const data = calculateVWAP(ohlcvData);
+                            if (!existingSeries) {
+                                const series = chartRef.current.addSeries(lc.LineSeries, {
+                                    color: indicator.color,
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                });
+                                series.setData(data);
+                                indicatorSeriesRef.current.set(indicator.id, series);
+                            } else {
+                                existingSeries.setData(data);
+                            }
+                            break;
+                        }
+                        case 'rsi': {
+                            if (!subChartRef.current) return;
+                            const data = calculateRSI(ohlcvData, indicator.params.period || 14);
+                            if (!existingSeries) {
+                                const series = subChartRef.current.addSeries(lc.LineSeries, {
+                                    color: indicator.color,
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                });
+                                series.setData(data);
+                                series.createPriceLine({ price: 70, color: '#ef4444', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+                                series.createPriceLine({ price: 30, color: '#22c55e', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+                                indicatorSeriesRef.current.set(indicator.id, series);
+                            } else {
+                                existingSeries.setData(data);
+                            }
+                            break;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error adding indicator ${indicator.type}:`, error);
+                }
+            });
+        };
+
+        updateIndicators();
+    }, [activeIndicators, ohlcvData, chartLoaded]);
 
     // Add indicator
     const addIndicator = useCallback((type: IndicatorType) => {
-        const config = DEFAULT_INDICATOR_CONFIGS[type];
         const newIndicator: ActiveIndicator = {
             id: `${type}-${Date.now()}`,
             type,
-            params: config.params,
-            color: config.color || '#ffffff',
+            params: { period: type === 'sma' || type === 'ema' ? 20 : 14 },
+            color: DEFAULT_COLORS[type] || '#ffffff',
             visible: true,
         };
         setActiveIndicators(prev => [...prev, newIndicator]);
@@ -721,24 +543,12 @@ export function AdvancedChart({
     const removeIndicator = useCallback((id: string) => {
         const series = indicatorSeriesRef.current.get(id);
         if (series) {
-            if (Array.isArray(series)) {
-                series.forEach((s: any) => {
-                    try {
-                        chartRef.current?.removeSeries(s);
-                    } catch {
-                        try {
-                            subChartRef.current?.removeSeries(s);
-                        } catch { }
-                    }
-                });
-            } else {
+            try {
+                chartRef.current?.removeSeries(series);
+            } catch {
                 try {
-                    chartRef.current?.removeSeries(series as any);
-                } catch {
-                    try {
-                        subChartRef.current?.removeSeries(series as any);
-                    } catch { }
-                }
+                    subChartRef.current?.removeSeries(series);
+                } catch { }
             }
             indicatorSeriesRef.current.delete(id);
         }
@@ -768,8 +578,8 @@ export function AdvancedChart({
                             key={int.value}
                             onClick={() => setIntervalState(int.value)}
                             className={`px-2 py-1 text-xs rounded transition-colors ${interval === int.value
-                                ? 'bg-cyan-500/20 text-cyan-400'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    ? 'bg-cyan-500/20 text-cyan-400'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             {int.label}
