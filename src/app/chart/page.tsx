@@ -66,29 +66,33 @@ export default function ChartPage() {
             // 2. Wait a moment for the insert to complete
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // 3. Fetch the most recent record (should be the one just inserted)
+            // 3. Calculate 7 days ago for historical data
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+            // 4. Fetch historical records (up to 500 over last 7 days)
             const { data, error } = await supabase
                 .from('market_levels')
                 .select('*')
-                .order('timestamp', { ascending: false })
-                .limit(50);
+                .gte('timestamp', sevenDaysAgo)
+                .order('timestamp', { ascending: true })
+                .limit(500);
 
             if (error) throw error;
             if (data && data.length > 0) {
-                // Filter for valid records (support != resistance)
+                // Filter for valid records (support != resistance, at least $100 difference)
                 const validRecords = data.filter(d =>
-                    Math.abs(d.support_price - d.resistance_price) > 100 // At least $100 difference
+                    Math.abs(d.support_price - d.resistance_price) > 100
                 );
 
                 if (validRecords.length > 0) {
-                    // Use latest valid record for display
-                    setLevels(validRecords[0]);
+                    // Use ALL valid records for history to show level changes over time
+                    setLevelsHistory(validRecords);
 
-                    // Use valid records for history (reversed to ascending order)
-                    setLevelsHistory(validRecords.slice(0, 20).reverse());
-                } else {
+                    // Use latest valid record for sidebar display
+                    setLevels(validRecords[validRecords.length - 1]);
+                } else if (data.length > 0) {
                     // Fallback to most recent even if potentially invalid
-                    setLevels(data[0]);
+                    setLevels(data[data.length - 1]);
                 }
                 setLastUpdate(new Date());
             }
