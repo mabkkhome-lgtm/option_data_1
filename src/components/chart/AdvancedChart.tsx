@@ -573,6 +573,15 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                         className={`absolute top-0 left-0 pointer-events-none z-10 ${!drawingsVisible ? 'opacity-0' : ''}`}
                         width={100} height={100}
                     />
+
+                    {/* DEBUG OVERLAY - REMOVE AFTER FIX */}
+                    <div className="absolute top-2 right-2 bg-black/80 text-green-400 p-2 text-xs font-mono z-50 pointer-events-none border border-green-500 rounded">
+                        <div>Dimensions: {chartContainerRef.current?.clientWidth}x{chartContainerRef.current?.clientHeight}</div>
+                        <div>Data: {ohlcvData.length} candles</div>
+                        <div>Loading: {loading.toString()}</div>
+                        <div>Chart Ref: {chartInstancesRef.current ? 'Created' : 'Null'}</div>
+                        <div>Error: {null /* placeholder */}</div>
+                    </div>
                 </div>
             </div>
 
