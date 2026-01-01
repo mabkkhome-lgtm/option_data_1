@@ -46,7 +46,7 @@ interface ActiveIndicator {
 
 interface Drawing {
     id: string;
-    type: 'trendline' | 'fib';
+    type: DrawingTool;
     p1: { time: number; price: number };
     p2: { time: number; price: number } | null; // null while dragging
     color: string;
@@ -336,7 +336,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         // Draw all saved drawings
         [...drawings, ...(drawingStateRef.current.currentPoint ? [{
             id: 'temp',
-            type: activeTool === 'fib' ? 'fib' : 'trendline',
+            type: activeTool === 'fib-retracement' ? 'fib-retracement' : 'trendline',
             p1: drawingStateRef.current.startPoint!,
             p2: drawingStateRef.current.currentPoint,
             color: '#fff'
@@ -353,14 +353,14 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             const endY = end.y;
 
             ctx.beginPath();
-            ctx.strokeStyle = activeTool === 'fib' && d.id === 'temp' ? '#aaa' : d.color;
+            ctx.strokeStyle = activeTool === 'fib-retracement' && d.id === 'temp' ? '#aaa' : d.color;
             ctx.lineWidth = 2;
 
             if (d.type === 'trendline') {
                 ctx.moveTo(startX, startY);
                 ctx.lineTo(endX, endY);
                 ctx.stroke();
-            } else if (d.type === 'fib') {
+            } else if (d.type === 'fib-retracement') {
                 // Simple Fib Drawing (0, 0.5, 1)
                 const yDiff = endY - startY;
                 const width = Math.max(200, endX - startX + 100); // Extend right
@@ -433,7 +433,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             // Finish Drawing
             const newDrawing: Drawing = {
                 id: Date.now().toString(),
-                type: activeTool === 'fib' ? 'fib' : 'trendline',
+                type: activeTool === 'fib-retracement' ? 'fib-retracement' : activeTool as DrawingTool,
                 p1: drawingStateRef.current.startPoint!,
                 p2: { time, price },
                 color: '#2962ff'
@@ -523,22 +523,25 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 relative flex">
-                {/* Left Toolbar */}
-                <div className="w-12 border-r border-gray-800 bg-[#1e222d] flex flex-col items-center py-4 z-20">
-                    <DrawingToolbar
-                        activeTool={activeTool}
-                        onSelectTool={setActiveTool}
-                        onClearAll={() => { setDrawings([]); drawOverlay(); }}
-                    />
-                </div>
+            <div className="flex-1 relative">
+                {/* Left Toolbar - absolute positioned within this container */}
+                <DrawingToolbar
+                    activeTool={activeTool}
+                    onSelectTool={setActiveTool}
+                    onClearAll={() => { setDrawings([]); drawOverlay(); }}
+                />
 
-                {/* Chart Container */}
-                <div className="flex-1 relative" ref={chartContainerRef} onClick={handleContainerClick} onMouseMove={handleMouseMove}>
+                {/* Chart Container - with left padding for toolbar */}
+                <div
+                    className="absolute left-12 top-0 right-0 bottom-0"
+                    ref={chartContainerRef}
+                    onClick={handleContainerClick}
+                    onMouseMove={handleMouseMove}
+                >
                     <canvas
                         ref={overlayRef}
                         className="absolute top-0 left-0 pointer-events-none z-10"
-                        width={100} height={100} // Resized by JS
+                        width={100} height={100}
                     />
                 </div>
             </div>
