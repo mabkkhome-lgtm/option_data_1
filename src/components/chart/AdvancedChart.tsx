@@ -243,7 +243,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             if (resizeObserver) resizeObserver.disconnect();
             if (mainChart) mainChart.remove();
         };
-    }, []);
+    }, [loading]);
 
     // 3. Update Candle Data
     useEffect(() => {
