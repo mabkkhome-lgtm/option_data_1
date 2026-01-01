@@ -536,11 +536,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 </div>
             </div>
 
-    // State for drawing controls
-            const [drawingsVisible, setDrawingsVisible] = useState(true);
-            const [drawingsLocked, setDrawingsLocked] = useState(false);
 
-            // ... (existing code) ...
 
             {/* Main Area */}
             <div className="flex-1 relative">
