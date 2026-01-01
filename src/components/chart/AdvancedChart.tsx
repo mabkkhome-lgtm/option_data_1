@@ -206,6 +206,9 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         };
         window.addEventListener('resize', handleResize);
 
+        // Initial sizing
+        handleResize();
+
         // handle click via container
 
         return () => {
