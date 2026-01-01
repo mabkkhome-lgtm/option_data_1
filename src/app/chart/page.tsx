@@ -60,17 +60,22 @@ export default function ChartPage() {
         if (!supabase) return;
 
         try {
-            // 1. Trigger the calculation and get the result directly
-            const apiResponse = await fetch('/api/cron/market-levels');
+            // 1. Trigger the calculation and get the result directly (with cache-busting)
+            const apiResponse = await fetch(`/api/cron/market-levels?t=${Date.now()}`);
             const apiData = await apiResponse.json();
+
+            console.log('[ChartPage] API Response:', apiData);
 
             // 2. Use API result directly for sidebar (always fresh and correct)
             if (apiData.success && apiData.data) {
                 const { support, resistance, gammaHighPrice, gammaLowPrice } = apiData.data;
                 const spot = apiData.stats?.spot || 88000;
 
+                console.log('[ChartPage] Parsed values:', { support, resistance, gammaHighPrice, gammaLowPrice, spot });
+
                 // Only use if S != R (valid calculation)
                 if (Math.abs(support - resistance) > 100) {
+                    console.log('[ChartPage] Setting valid levels');
                     setLevels({
                         id: Date.now(),
                         timestamp: new Date().toISOString(),
@@ -81,7 +86,11 @@ export default function ChartPage() {
                         support_price: support,
                         resistance_price: resistance,
                     });
+                } else {
+                    console.log('[ChartPage] S==R, skipping invalid data');
                 }
+            } else {
+                console.log('[ChartPage] API response missing success or data');
             }
 
             // 3. Fetch valid historical records for chart lines
