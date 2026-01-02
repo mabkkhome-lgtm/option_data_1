@@ -99,7 +99,7 @@ export default function ChartPage() {
                 .from('market_levels')
                 .select('*')
                 .order('timestamp', { ascending: false })
-                .limit(200);
+                .limit(10000);
 
             if (!error && data && data.length > 0) {
                 // Filter for valid records only (S != R)
