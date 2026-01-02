@@ -103,21 +103,34 @@ export default function ChartPage() {
                 .limit(100000); // Increased from 10000 to 100000 to cover days of 5s data
 
             if (!historyError && history && history.length > 0) {
-                // Filter for valid records only (S != R)
+                console.log('[DEBUG] Fetched rows:', history.length);
+                console.log('[DEBUG] Oldest Raw:', history[history.length - 1].timestamp);
+
+                // Filter for valid records only (S != R) - Relaxed to > 0
                 const validRecords = history.filter(d =>
-                    Math.abs(d.support_price - d.resistance_price) > 100
+                    Math.abs(d.support_price - d.resistance_price) > 0
                 );
+                console.log('[DEBUG] Valid rows:', validRecords.length);
 
                 if (validRecords.length > 0) {
                     // Reverse to ascending order for chart
-                    // AND Convert ISO timestamp strings to Unix Seconds (number)
-                    const parsedHistory = validRecords.reverse().map(r => ({
-                        ...r,
-                        // If timestamp is string/ISO, parse it. If number, keep it.
-                        timestamp: typeof r.timestamp === 'string'
-                            ? Math.floor(new Date(r.timestamp).getTime() / 1000)
-                            : r.timestamp
-                    }));
+                    // Robust Timestamp Normalization
+                    const parsedHistory = validRecords.reverse().map(r => {
+                        let ts: number;
+                        if (typeof r.timestamp === 'string') {
+                            ts = new Date(r.timestamp).getTime();
+                        } else {
+                            ts = r.timestamp as number;
+                        }
+
+                        // Check if Milliseconds (e.g. > 10 billion) -> Convert to Seconds
+                        // Unix Sec for 2026 is ~1.7e9. Unix MS is ~1.7e12.
+                        if (ts > 10000000000) {
+                            ts = Math.floor(ts / 1000);
+                        }
+                        
+                        return { ...r, timestamp: ts };
+                    });
 
                     setLevelsHistory(parsedHistory);
                 }

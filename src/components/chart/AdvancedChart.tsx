@@ -285,6 +285,15 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
             // Map levels to candle times
             // Map levels to candle times using optimized O(N+M) scan
+            if (ohlcvData.length > 0 && sortedLevels.length > 0) {
+                console.log('[DEBUG] -----------------');
+                console.log('[DEBUG] Candle T Start:', ohlcvData[0].time);
+                console.log('[DEBUG] Candle T End:', ohlcvData[ohlcvData.length - 1].time);
+                console.log('[DEBUG] Level T Start:', sortedLevels[0].timestamp);
+                console.log('[DEBUG] Level T End:', sortedLevels[sortedLevels.length - 1].timestamp);
+                console.log('[DEBUG] Level[0]:', sortedLevels[0]);
+                console.log('[DEBUG] -----------------');
+            }
             let levelIdx = 0;
             for (const candle of ohlcvData) {
                 // Advance levelIdx to the latest level that is <= candle.time
