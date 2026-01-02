@@ -14,238 +14,1066 @@
  Detected additional lockfiles: 
    * /Users/mat/Desktop/indicator/Option_app/app/package-lock.json
 
-✓ Ready in 984ms
-[Cron] Starting calculation at 2026-01-02T11:43:44.549Z
+✓ Ready in 2.5s
+[Cron] Starting calculation at 2026-01-02T11:48:15.387Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90911, GH=88744, GL=89461
+[Cron] Starting calculation at 2026-01-02T11:48:15.425Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90916, GH=88823, GL=89541
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:43:49.530Z
-[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:43:54.523Z
+[Cron] Starting calculation at 2026-01-02T11:48:19.545Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:43:59.543Z
+[Cron] Starting calculation at 2026-01-02T11:48:24.537Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:04.524Z
+[Cron] Starting calculation at 2026-01-02T11:48:29.527Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:09.533Z
+[Cron] Starting calculation at 2026-01-02T11:48:34.531Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5647 total trades
+[Cron] Filtered to 880 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:14.537Z
+[Cron] Starting calculation at 2026-01-02T11:48:39.528Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90916, GH=88822, GL=89540
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:19.523Z
+[Cron] Starting calculation at 2026-01-02T11:48:44.539Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:24.525Z
+[Cron] Starting calculation at 2026-01-02T11:48:49.545Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5626 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90910, GH=88736, GL=89453
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:29.555Z
+[Cron] Starting calculation at 2026-01-02T11:48:54.528Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5627 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90915, GH=88769, GL=89487
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:34.588Z
+[Cron] Starting calculation at 2026-01-02T11:48:59.540Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5627 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90915, GH=88769, GL=89487
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:39.671Z
+[Cron] Starting calculation at 2026-01-02T11:49:04.535Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5627 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90915, GH=88769, GL=89487
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:44.551Z
+[Cron] Starting calculation at 2026-01-02T11:49:09.542Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5627 total trades
-[Cron] Filtered to 874 trades
-[Cron] Result: S=87209, R=90915, GH=88769, GL=89487
+[Cron] Fetched 5648 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87212, R=90916, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:49.534Z
+[Cron] Starting calculation at 2026-01-02T11:49:14.533Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5629 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90917, GH=88774, GL=89492
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:54.563Z
+[Cron] Starting calculation at 2026-01-02T11:49:19.522Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5629 total trades
-[Cron] Filtered to 876 trades
-[Cron] Result: S=87212, R=90916, GH=88785, GL=89503
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:44:59.569Z
+[Cron] Starting calculation at 2026-01-02T11:49:24.532Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5629 total trades
-[Cron] Filtered to 876 trades
-[Cron] Result: S=87212, R=90916, GH=88785, GL=89503
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:04.527Z
+[Cron] Starting calculation at 2026-01-02T11:49:29.522Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5630 total trades
-[Cron] Filtered to 876 trades
-[Cron] Result: S=87209, R=90916, GH=88808, GL=89526
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:09.542Z
+[Cron] Starting calculation at 2026-01-02T11:49:34.541Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:14.567Z
+[Cron] Starting calculation at 2026-01-02T11:49:39.529Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:19.552Z
+[Cron] Starting calculation at 2026-01-02T11:49:44.541Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:24.633Z
+[Cron] Starting calculation at 2026-01-02T11:49:49.529Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5649 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88823, GL=89541
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:29.525Z
+[Cron] Starting calculation at 2026-01-02T11:49:54.532Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5653 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:34.618Z
+[Cron] Starting calculation at 2026-01-02T11:49:59.531Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5653 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88822, GL=89540
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:39.552Z
+[Cron] Starting calculation at 2026-01-02T11:50:04.533Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5634 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88815, GL=89533
+[Cron] Fetched 5653 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88822, GL=89540
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:44.556Z
+[Cron] Starting calculation at 2026-01-02T11:50:09.549Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 879 trades
-[Cron] Result: S=87211, R=90918, GH=88788, GL=89505
+[Cron] Fetched 5653 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88822, GL=89540
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:49.571Z
+[Cron] Starting calculation at 2026-01-02T11:50:14.534Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 879 trades
-[Cron] Result: S=87211, R=90918, GH=88788, GL=89505
+[Cron] Fetched 5653 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88822, GL=89540
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:54.578Z
+[Cron] Starting calculation at 2026-01-02T11:50:19.548Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 879 trades
-[Cron] Result: S=87211, R=90918, GH=88788, GL=89505
+[Cron] Fetched 5654 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87212, R=90918, GH=88822, GL=89360
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:45:59.541Z
+[Cron] Starting calculation at 2026-01-02T11:50:24.533Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 878 trades
-[Cron] Result: S=87212, R=90918, GH=88795, GL=89513
+[Cron] Fetched 5654 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87212, R=90918, GH=88822, GL=89360
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:04.529Z
+[Cron] Starting calculation at 2026-01-02T11:50:29.531Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 878 trades
-[Cron] Result: S=87212, R=90918, GH=88795, GL=89513
+[Cron] Fetched 5654 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87212, R=90918, GH=88822, GL=89360
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:09.530Z
+[Cron] Starting calculation at 2026-01-02T11:50:34.525Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 878 trades
-[Cron] Result: S=87212, R=90918, GH=88795, GL=89513
+[Cron] Fetched 5654 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87212, R=90918, GH=88822, GL=89360
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:14.525Z
+[Cron] Starting calculation at 2026-01-02T11:50:39.530Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88800, GL=89518
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:19.528Z
+[Cron] Starting calculation at 2026-01-02T11:50:44.534Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88800, GL=89518
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:24.529Z
+[Cron] Starting calculation at 2026-01-02T11:50:49.557Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88800, GL=89518
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:29.564Z
+[Cron] Starting calculation at 2026-01-02T11:50:54.554Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88800, GL=89518
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:34.531Z
+[Cron] Starting calculation at 2026-01-02T11:50:59.529Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88792, GL=89509
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:39.530Z
+[Cron] Starting calculation at 2026-01-02T11:51:04.527Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88792, GL=89509
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:44.527Z
+[Cron] Starting calculation at 2026-01-02T11:51:09.535Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88792, GL=89509
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:49.574Z
+[Cron] Starting calculation at 2026-01-02T11:51:14.537Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88792, GL=89509
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88821, GL=89359
 [Cron] Successfully saved to DB
-[Cron] Starting calculation at 2026-01-02T11:46:54.531Z
+[Cron] Starting calculation at 2026-01-02T11:51:19.551Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
-[Cron] Fetched 5641 total trades
-[Cron] Filtered to 877 trades
-[Cron] Result: S=87213, R=90916, GH=88792, GL=89509
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:24.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:29.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:34.611Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:39.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:44.526Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:49.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:54.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:51:59.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:04.585Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:09.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:14.539Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:19.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:24.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:29.532Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:34.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:39.536Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:44.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:49.549Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:54.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:52:59.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:04.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5657 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87213, R=90917, GH=88811, GL=89529
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:09.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88818, GL=89536
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:14.529Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88818, GL=89536
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:19.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88818, GL=89536
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:24.546Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88818, GL=89536
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:29.532Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:34.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:39.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:44.527Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:49.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:54.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5665 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88817, GL=89535
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:53:59.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:04.566Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:09.538Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:14.536Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:19.528Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:24.532Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5666 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88828, GL=89546
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:29.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:34.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:39.538Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:44.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:49.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:54.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:54:59.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:04.534Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:09.536Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:14.534Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88824, GL=89542
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:19.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87212, R=90917, GH=88834, GL=89373
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:24.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88663, GL=89381
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:29.553Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88663, GL=89381
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:34.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:39.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:44.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:49.544Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:54.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:55:59.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:04.561Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5672 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:09.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:14.528Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:19.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:24.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:29.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90914, GH=88675, GL=89393
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:34.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5675 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90916, GH=88668, GL=89387
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:39.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:44.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:49.560Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:54.550Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:56:59.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:04.527Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:09.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:14.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:19.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:24.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:29.527Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:34.532Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:39.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88830, GL=89369
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:44.533Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88829, GL=89547
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:49.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88827, GL=89545
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:54.588Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88827, GL=89545
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:57:59.539Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:04.551Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:09.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:14.554Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:19.539Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:24.530Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:29.539Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88825, GL=89543
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:34.534Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:39.539Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:44.534Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:49.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:54.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:58:59.528Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:04.538Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:09.556Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:14.536Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:19.590Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:24.545Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:29.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:34.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:39.596Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 884 trades
+[Cron] Result: S=87211, R=90917, GH=88801, GL=89519
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:44.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88780, GL=89498
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:49.554Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88780, GL=89498
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:54.551Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88780, GL=89498
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T11:59:59.542Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88780, GL=89498
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:04.562Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 883 trades
+[Cron] Result: S=87211, R=90917, GH=88780, GL=89498
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:09.532Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5687 total trades
+[Cron] Filtered to 885 trades
+[Cron] Result: S=87202, R=90924, GH=88787, GL=89504
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:14.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5690 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88785, GL=89502
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:19.545Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88770, GL=89488
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:24.538Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87216, R=90916, GH=88759, GL=89477
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:29.544Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87216, R=90916, GH=88759, GL=89477
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:34.606Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87216, R=90916, GH=88759, GL=89477
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:39.558Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87215, R=90913, GH=88744, GL=89462
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:44.548Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87215, R=90913, GH=88744, GL=89462
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:49.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5694 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87215, R=90913, GH=88744, GL=89462
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:54.546Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5696 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90911, GH=88739, GL=89456
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:00:59.547Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5697 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90917, GH=88765, GL=89482
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:04.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5706 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88783, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:09.545Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5706 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88783, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:14.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5706 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88783, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:19.538Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5706 total trades
+[Cron] Filtered to 882 trades
+[Cron] Result: S=87214, R=90918, GH=88787, GL=89504
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:24.556Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:29.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:34.531Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:39.544Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:44.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:49.541Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:54.537Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:01:59.543Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:04.565Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:09.582Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:14.549Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:19.560Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:24.550Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:29.534Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:34.535Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:39.558Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:44.544Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
+[Cron] Successfully saved to DB
+[Cron] Starting calculation at 2026-01-02T12:02:49.540Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 5707 total trades
+[Cron] Filtered to 881 trades
+[Cron] Result: S=87213, R=90917, GH=88782, GL=89500
 [Cron] Successfully saved to DB

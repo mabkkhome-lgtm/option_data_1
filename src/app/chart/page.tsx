@@ -110,7 +110,16 @@ export default function ChartPage() {
 
                 if (validRecords.length > 0) {
                     // Reverse to ascending order for chart
-                    setLevelsHistory(validRecords.reverse());
+                    // AND Convert ISO timestamp strings to Unix Seconds (number)
+                    const parsedHistory = validRecords.reverse().map(r => ({
+                        ...r,
+                        // If timestamp is string/ISO, parse it. If number, keep it.
+                        timestamp: typeof r.timestamp === 'string'
+                            ? Math.floor(new Date(r.timestamp).getTime() / 1000)
+                            : r.timestamp
+                    }));
+
+                    setLevelsHistory(parsedHistory);
                 }
             }
 
