@@ -95,15 +95,16 @@ export default function ChartPage() {
             }
 
             // 3. Fetch valid historical records for chart lines
-            const { data, error } = await supabase
+            // Fetch historical levels - increased limit to ensure full history coverage
+            const { data: history, error: historyError } = await supabase
                 .from('market_levels')
                 .select('*')
                 .order('timestamp', { ascending: false })
-                .limit(10000);
+                .limit(100000); // Increased from 10000 to 100000 to cover days of 5s data
 
-            if (!error && data && data.length > 0) {
+            if (!historyError && history && history.length > 0) {
                 // Filter for valid records only (S != R)
-                const validRecords = data.filter(d =>
+                const validRecords = history.filter(d =>
                     Math.abs(d.support_price - d.resistance_price) > 100
                 );
 
