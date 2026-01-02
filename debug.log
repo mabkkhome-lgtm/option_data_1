@@ -183,3 +183,46 @@
  GET /api/history 200 in 5.4s (compile: 5ms, render: 5.4s)
 [Cron] Starting calculation at 2026-01-02T19:21:39.171Z
 [Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 12163 total trades
+[Cron] Filtered to 2052 trades
+[Cron] Result: S=87344, R=90717, GH=89117, GL=88937
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767381699146 200 in 1380ms (compile: 7ms, render: 1373ms)
+[API] Detched total 48415 rows
+ GET /api/history 200 in 5.7s (compile: 1279µs, render: 5.7s)
+[Cron] Starting calculation at 2026-01-02T19:21:44.166Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 12163 total trades
+[Cron] Filtered to 2052 trades
+[Cron] Result: S=87344, R=90717, GH=89117, GL=88937
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767381704146 200 in 1176ms (compile: 6ms, render: 1169ms)
+[API] Detched total 48417 rows
+ GET /api/history 200 in 5.9s (compile: 7ms, render: 5.9s)
+[Cron] Starting calculation at 2026-01-02T19:21:49.163Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 12163 total trades
+[Cron] Filtered to 2052 trades
+[Cron] Result: S=87344, R=90717, GH=89117, GL=88937
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767381709146 200 in 1440ms (compile: 4ms, render: 1436ms)
+[API] Detched total 48419 rows
+ GET /api/history 200 in 5.5s (compile: 1527µs, render: 5.4s)
+[Cron] Starting calculation at 2026-01-02T19:21:54.157Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 12163 total trades
+[Cron] Filtered to 2052 trades
+[Cron] Result: S=87344, R=90717, GH=89117, GL=88937
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767381714145 200 in 1255ms (compile: 6ms, render: 1249ms)
+[API] Detched total 48421 rows
+ GET /api/history 200 in 5.5s (compile: 4ms, render: 5.5s)
+[Cron] Starting calculation at 2026-01-02T19:21:59.154Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 12163 total trades
+[Cron] Filtered to 2052 trades
+[Cron] Result: S=87344, R=90717, GH=89117, GL=88937
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767381719146 200 in 1171ms (compile: 1706µs, render: 1169ms)
+[API] Detched total 48423 rows
+ GET /api/history 200 in 5.1s (compile: 1137µs, render: 5.1s)

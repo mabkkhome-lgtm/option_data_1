@@ -337,35 +337,38 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 console.log('[DEBUG] -----------------');
             }
             let levelIdx = 0;
-            for (const candle of ohlcvData) {
-                // Advance levelIdx to the latest level that is <= candle.time
-                // We assume sortedLevels is sorted by timestamp ascending
-                while (levelIdx < sortedLevels.length - 1 && sortedLevels[levelIdx + 1].timestamp <= candle.time) {
-                    levelIdx++;
-                }
+            // Create a lookup function to find the best matching level for a given timestamp
+            const findLevelForTime = (targetTime: number): typeof sortedLevels[0] | null => {
+                if (sortedLevels.length === 0) return null;
 
-                // If the first level is already newer than the candle, we use the first level (or no level)
-                // But generally sortedLevels[levelIdx] is the active level
-                let level = sortedLevels[levelIdx];
+                // Binary search for the level with timestamp <= targetTime
+                let left = 0;
+                let right = sortedLevels.length - 1;
+                let result = -1;
 
-                // Safety check: if even the oldest level is newer than candle, line should not exist?
-                // For now, we extend the oldest level backwards (flat) or check timestamp
-                if (level.timestamp > candle.time && levelIdx === 0) {
-                    // level = sortedLevels[0]; // Logic keeps initialized level
-                }
-
-                if (level) {
-                    // Log first 3 entries to debug
-                    if (supportData.length < 3) {
-                        console.log('[DEBUG] Pushing:', {
-                            candleTime: candle.time,
-                            levelTimestamp: level.timestamp,
-                            support: level.support,
-                            resistance: level.resistance,
-                            levelIdx,
-                            levelKeys: Object.keys(level)
-                        });
+                while (left <= right) {
+                    const mid = Math.floor((left + right) / 2);
+                    if (sortedLevels[mid].timestamp <= targetTime) {
+                        result = mid;
+                        left = mid + 1;
+                    } else {
+                        right = mid - 1;
                     }
+                }
+
+                // If no level found <= targetTime, use the first level (extend backwards)
+                if (result === -1) {
+                    return sortedLevels[0];
+                }
+
+                return sortedLevels[result];
+            };
+
+            // Map each candle to its corresponding level
+            for (const candle of ohlcvData) {
+                const level = findLevelForTime(candle.time as number);
+
+                if (level && level.support !== undefined) {
                     supportData.push({ time: candle.time as Time, value: level.support });
                     resistanceData.push({ time: candle.time as Time, value: level.resistance });
                     ghData.push({ time: candle.time as Time, value: level.gammaHigh });
@@ -373,14 +376,11 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 }
             }
 
-            // Log summary
-            console.log('[DEBUG] Data pushed:', {
-                supportCount: supportData.length,
-                firstSupport: supportData[0],
-                lastSupport: supportData[supportData.length - 1],
-                firstResistance: resistanceData[0],
-                lastResistance: resistanceData[resistanceData.length - 1]
-            });
+            // Debug: Log first and last values to verify variance
+            if (supportData.length > 0) {
+                console.log('[LEVEL DEBUG] First support:', supportData[0].value, 'Last support:', supportData[supportData.length - 1].value);
+                console.log('[LEVEL DEBUG] Variance:', Math.abs(supportData[0].value - supportData[supportData.length - 1].value));
+            }
 
             levelSeries.support.setData(supportData);
             levelSeries.resistance.setData(resistanceData);
