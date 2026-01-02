@@ -284,15 +284,23 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             const glData: LineData[] = [];
 
             // Map levels to candle times
+            // Map levels to candle times using optimized O(N+M) scan
+            let levelIdx = 0;
             for (const candle of ohlcvData) {
-                // Find latest level applicable to this candle
-                let level = sortedLevels[0];
-                for (let i = sortedLevels.length - 1; i >= 0; i--) {
-                    // Check if level timestamp (seconds) is before or equal to candle time
-                    if (sortedLevels[i].timestamp <= candle.time) {
-                        level = sortedLevels[i];
-                        break;
-                    }
+                // Advance levelIdx to the latest level that is <= candle.time
+                // We assume sortedLevels is sorted by timestamp ascending
+                while (levelIdx < sortedLevels.length - 1 && sortedLevels[levelIdx + 1].timestamp <= candle.time) {
+                    levelIdx++;
+                }
+
+                // If the first level is already newer than the candle, we use the first level (or no level)
+                // But generally sortedLevels[levelIdx] is the active level
+                let level = sortedLevels[levelIdx];
+
+                // Safety check: if even the oldest level is newer than candle, line should not exist?
+                // For now, we extend the oldest level backwards (flat) or check timestamp
+                if (level.timestamp > candle.time && levelIdx === 0) {
+                    // level = sortedLevels[0]; // Logic keeps initialized level
                 }
 
                 if (level) {
