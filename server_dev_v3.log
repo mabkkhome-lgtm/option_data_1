@@ -1,0 +1,312 @@
+
+> app@0.1.0 dev
+> next dev
+
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/mat/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/mat/Desktop/indicator/Option_app/app/package-lock.json
+
+▲ Next.js 16.1.1 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.178.33:3000
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 2.6s
+ GET /chart 200 in 3.1s (compile: 2.7s, render: 460ms)
+[Cron] Starting calculation at 2026-01-02T17:55:30.490Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10926 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87203, R=90686, GH=89133, GL=88951
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376529809 200 in 2.3s (compile: 450ms, render: 1833ms)
+ GET /api/history 200 in 990ms (compile: 764ms, render: 225ms)
+[Cron] Starting calculation at 2026-01-02T17:55:34.841Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10926 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87203, R=90686, GH=89133, GL=88951
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376534810 200 in 1546ms (compile: 7ms, render: 1539ms)
+ GET /api/history 200 in 160ms (compile: 13ms, render: 148ms)
+[Cron] Starting calculation at 2026-01-02T17:55:39.848Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10926 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87203, R=90686, GH=89133, GL=88951
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376539812 200 in 2.7s (compile: 21ms, render: 2.7s)
+ GET /api/history 200 in 249ms (compile: 14ms, render: 235ms)
+[Cron] Starting calculation at 2026-01-02T17:55:44.867Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10930 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87206, R=90687, GH=89120, GL=88939
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376544812 200 in 2.6s (compile: 19ms, render: 2.6s)
+ GET /api/history 200 in 332ms (compile: 101ms, render: 231ms)
+[Cron] Starting calculation at 2026-01-02T17:55:49.973Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10930 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87206, R=90687, GH=89118, GL=88936
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376549812 200 in 3.0s (compile: 47ms, render: 3.0s)
+ GET /api/history 200 in 220ms (compile: 23ms, render: 198ms)
+[Cron] Starting calculation at 2026-01-02T17:55:54.898Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10930 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87192, R=90687, GH=89131, GL=88950
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376554812 200 in 1554ms (compile: 31ms, render: 1523ms)
+ GET /api/history 200 in 418ms (compile: 210ms, render: 209ms)
+[Cron] Starting calculation at 2026-01-02T17:55:59.860Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10930 total trades
+[Cron] Filtered to 1773 trades
+[Cron] Result: S=87206, R=90687, GH=88965, GL=88965
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376559811 200 in 2.5s (compile: 7ms, render: 2.5s)
+ GET /api/history 200 in 255ms (compile: 17ms, render: 238ms)
+[Cron] Starting calculation at 2026-01-02T17:56:04.891Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10932 total trades
+[Cron] Filtered to 1773 trades
+[Cron] Result: S=87203, R=90686, GH=88979, GL=88979
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376564812 200 in 2.7s (compile: 25ms, render: 2.7s)
+ GET /api/history 200 in 750ms (compile: 237ms, render: 513ms)
+[Cron] Starting calculation at 2026-01-02T17:56:09.878Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10932 total trades
+[Cron] Filtered to 1773 trades
+[Cron] Result: S=87203, R=90686, GH=88979, GL=88979
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376569812 200 in 2.7s (compile: 26ms, render: 2.7s)
+ GET /api/history 200 in 355ms (compile: 99ms, render: 255ms)
+[Cron] Starting calculation at 2026-01-02T17:56:14.877Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10932 total trades
+[Cron] Filtered to 1773 trades
+[Cron] Result: S=87203, R=90686, GH=88979, GL=88979
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376574812 200 in 2.6s (compile: 18ms, render: 2.6s)
+ GET /api/history 200 in 218ms (compile: 37ms, render: 181ms)
+[Cron] Starting calculation at 2026-01-02T17:56:19.921Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376579812 200 in 2.8s (compile: 20ms, render: 2.8s)
+ GET /api/history 200 in 253ms (compile: 15ms, render: 237ms)
+[Cron] Starting calculation at 2026-01-02T17:56:24.865Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376584812 200 in 2.1s (compile: 13ms, render: 2.1s)
+ GET /api/history 200 in 232ms (compile: 22ms, render: 210ms)
+[Cron] Starting calculation at 2026-01-02T17:56:29.845Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376589812 200 in 2.4s (compile: 15ms, render: 2.4s)
+ GET /api/history 200 in 150ms (compile: 15ms, render: 135ms)
+[Cron] Starting calculation at 2026-01-02T17:56:34.853Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376594812 200 in 1169ms (compile: 8ms, render: 1160ms)
+ GET /api/history 200 in 133ms (compile: 19ms, render: 114ms)
+[Cron] Starting calculation at 2026-01-02T17:56:39.833Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376599813 200 in 1142ms (compile: 5ms, render: 1137ms)
+ GET /api/history 200 in 134ms (compile: 4ms, render: 130ms)
+[Cron] Starting calculation at 2026-01-02T17:56:44.873Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376604812 200 in 1564ms (compile: 19ms, render: 1546ms)
+ GET /api/history 200 in 176ms (compile: 15ms, render: 161ms)
+[Cron] Starting calculation at 2026-01-02T17:56:49.880Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376609812 200 in 1550ms (compile: 17ms, render: 1533ms)
+ GET /api/history 200 in 192ms (compile: 19ms, render: 173ms)
+[Cron] Starting calculation at 2026-01-02T17:56:54.865Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87203, R=90686, GH=88999, GL=88999
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376614812 200 in 2.7s (compile: 20ms, render: 2.7s)
+ GET /api/history 200 in 350ms (compile: 16ms, render: 334ms)
+[Cron] Starting calculation at 2026-01-02T17:56:59.881Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87203, R=90687, GH=88962, GL=88962
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376619813 200 in 1989ms (compile: 15ms, render: 1974ms)
+ GET /api/history 200 in 281ms (compile: 55ms, render: 226ms)
+[Cron] Starting calculation at 2026-01-02T17:57:04.846Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87204, R=90687, GH=89134, GL=88953
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376624813 200 in 1981ms (compile: 10ms, render: 1971ms)
+ GET /api/history 200 in 201ms (compile: 7ms, render: 194ms)
+[Cron] Starting calculation at 2026-01-02T17:57:09.968Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87204, R=90687, GH=89134, GL=88953
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376629813 200 in 3.7s (compile: 40ms, render: 3.7s)
+ GET /api/history 200 in 229ms (compile: 13ms, render: 216ms)
+[Cron] Starting calculation at 2026-01-02T17:57:14.841Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10935 total trades
+[Cron] Filtered to 1775 trades
+[Cron] Result: S=87204, R=90687, GH=89134, GL=88953
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376634813 200 in 1299ms (compile: 9ms, render: 1290ms)
+ GET /api/history 200 in 133ms (compile: 5ms, render: 128ms)
+[Cron] Starting calculation at 2026-01-02T17:57:19.863Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1776 trades
+[Cron] Result: S=87207, R=90687, GH=88970, GL=88970
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376639813 200 in 1691ms (compile: 7ms, render: 1683ms)
+ GET /api/history 200 in 158ms (compile: 10ms, render: 148ms)
+[Cron] Starting calculation at 2026-01-02T17:57:24.870Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376644812 200 in 1158ms (compile: 6ms, render: 1152ms)
+[Cron] Starting calculation at 2026-01-02T17:57:29.878Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376649812 200 in 1613ms (compile: 24ms, render: 1590ms)
+[API] Detched total 46757 rows
+ GET /api/history 200 in 6.8s (compile: 531ms, render: 6.3s)
+[Cron] Starting calculation at 2026-01-02T17:57:34.848Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376654812 200 in 1347ms (compile: 12ms, render: 1335ms)
+[API] Detched total 46758 rows
+ GET /api/history 200 in 5.2s (compile: 7ms, render: 5.2s)
+[Cron] Starting calculation at 2026-01-02T17:57:40.425Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Starting calculation at 2026-01-02T17:57:44.929Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376659813 200 in 6.1s (compile: 277ms, render: 5.8s)
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376664843 200 in 4.2s (compile: 18ms, render: 4.2s)
+[API] Detched total 46761 rows
+ GET /api/history 200 in 14.0s (compile: 3ms, render: 14.0s)
+[Cron] Starting calculation at 2026-01-02T17:57:50.216Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376669813 200 in 1637ms (compile: 25ms, render: 1612ms)
+[Cron] Starting calculation at 2026-01-02T17:57:54.910Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[API] Detched total 46762 rows
+ GET /api/history 200 in 9.7s (compile: 38ms, render: 9.6s)
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376674814 200 in 1622ms (compile: 16ms, render: 1606ms)
+[API] Detched total 46763 rows
+ GET /api/history 200 in 7.8s (compile: 18ms, render: 7.8s)
+[API] Detched total 46763 rows
+ GET /api/history 200 in 6.4s (compile: 3ms, render: 6.4s)
+[Cron] Starting calculation at 2026-01-02T17:57:59.825Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376679813 200 in 1407ms (compile: 6ms, render: 1401ms)
+[API] Detched total 46764 rows
+ GET /api/history 200 in 6.3s (compile: 7ms, render: 6.3s)
+[Cron] Starting calculation at 2026-01-02T17:58:04.858Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+✓ Compiled in 1439ms
+[Cron] Starting calculation at 2026-01-02T17:58:05.149Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376684813 200 in 2.3s (compile: 9ms, render: 2.3s)
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Starting calculation at 2026-01-02T17:58:10.946Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376685139 200 in 5.9s (compile: 1721µs, render: 5.9s)
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[API] Detched total 46766 rows
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376690142 200 in 2.3s (compile: 11ms, render: 2.3s)
+ GET /api/history 200 in 12.0s (compile: 10ms, render: 12.0s)
+[Cron] Starting calculation at 2026-01-02T17:58:15.171Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z
+[Cron] Fetched 10937 total trades
+[Cron] Filtered to 1774 trades
+[Cron] Result: S=87204, R=90687, GH=88974, GL=88974
+[Cron] Successfully saved to DB
+ GET /api/cron/market-levels?t=1767376695142 200 in 1228ms (compile: 9ms, render: 1220ms)
+[API] Detched total 46768 rows
+[API] Detched total 46768 rows
+ GET /api/history 200 in 10.0s (compile: 84ms, render: 9.9s)
+ GET /api/history 200 in 6.2s (compile: 1366µs, render: 6.2s)
+[API] Detched total 46768 rows
+ GET /api/history 200 in 5.2s (compile: 3ms, render: 5.2s)
+[Cron] Starting calculation at 2026-01-02T17:58:20.202Z
+[Cron] User midnight (CET): 2026-01-01T23:00:00.000Z

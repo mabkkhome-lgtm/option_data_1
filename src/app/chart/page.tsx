@@ -96,44 +96,28 @@ export default function ChartPage() {
 
             // 3. Fetch valid historical records for chart lines
             // Fetch historical levels - increased limit to ensure full history coverage
-            const { data: history, error: historyError } = await supabase
-                .from('market_levels')
-                .select('*')
-                .order('timestamp', { ascending: false })
-                .limit(100000); // Increased from 10000 to 100000 to cover days of 5s data
+            // Fetch historical levels via Server API to bypass client limits
+            // This ensures we get > 1000 rows and correct timestamps
+            const res = await fetch('/api/history', { cache: 'no-store' });
+            if (!res.ok) throw new Error('Failed to fetch history API');
+
+            const responseData = await res.json();
+            const history = responseData.data || [];
+            const historyError = responseData.error;
 
             if (!historyError && history && history.length > 0) {
-                console.log('[DEBUG] Fetched rows:', history.length);
-                console.log('[DEBUG] Oldest Raw:', history[history.length - 1].timestamp);
+                console.log('[DEBUG] Fetched from API:', history.length);
 
-                // Filter for valid records only (S != R) - Relaxed to > 0
-                const validRecords = history.filter(d =>
-                    Math.abs(d.support_price - d.resistance_price) > 0
-                );
-                console.log('[DEBUG] Valid rows:', validRecords.length);
+                // API returns normalized, filtered, descending data.
+                // We just need to reverse it for the chart (Ascending).
+                const safeHistory = [...history].reverse().map(r => {
+                    let ts = r.timestamp;
+                    // Final safety catch for 1970 issue
+                    if (ts < 1600000000) ts *= 1000;
+                    return { ...r, timestamp: ts };
+                });
 
-                if (validRecords.length > 0) {
-                    // Reverse to ascending order for chart
-                    // Robust Timestamp Normalization
-                    const parsedHistory = validRecords.reverse().map(r => {
-                        let ts: number;
-                        if (typeof r.timestamp === 'string') {
-                            ts = new Date(r.timestamp).getTime();
-                        } else {
-                            ts = r.timestamp as number;
-                        }
-
-                        // Check if Milliseconds (e.g. > 10 billion) -> Convert to Seconds
-                        // Unix Sec for 2026 is ~1.7e9. Unix MS is ~1.7e12.
-                        if (ts > 10000000000) {
-                            ts = Math.floor(ts / 1000);
-                        }
-                        
-                        return { ...r, timestamp: ts };
-                    });
-
-                    setLevelsHistory(parsedHistory);
-                }
+                setLevelsHistory(safeHistory);
             }
 
             setLastUpdate(new Date());

@@ -77,7 +77,9 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     } | null>(null);
 
     // Canvas Overlay Refs
+    // Canvas Overlay Refs
     const overlayRef = useRef<HTMLCanvasElement>(null);
+
     const drawingStateRef = useRef<{
         isDrawing: boolean;
         startPoint: { time: number; price: number } | null;
@@ -95,6 +97,42 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     const [drawings, setDrawings] = useState<Drawing[]>([]);
     const [drawingsVisible, setDrawingsVisible] = useState(true);
     const [drawingsLocked, setDrawingsLocked] = useState(false);
+
+    // DEBUG STATE (Moved here)
+    const [debugInfo, setDebugInfo] = useState<any>(null);
+    // Update debug info when data changes
+    useEffect(() => {
+        if (ohlcvData.length > 0 && levelsHistory.length > 0) {
+            // Sort only for reading debug info
+            const sorted = [...levelsHistory].sort((a: any, b: any) => {
+                let tA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : a.timestamp;
+                let tB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : b.timestamp;
+                if (tA > 1e10) tA = tA / 1000;
+                if (tB > 1e10) tB = tB / 1000;
+                return tA - tB;
+            });
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+
+            // Normalize for display
+            const norm = (t: any) => {
+                let v = typeof t === 'string' ? new Date(t).getTime() : t;
+                if (v > 1e10) v = v / 1000;
+                return Math.floor(v);
+            }
+
+            setDebugInfo({
+                C_Start: ohlcvData[0].time as number,
+                C_End: ohlcvData[ohlcvData.length - 1].time as number,
+                L_StartRaw: first.timestamp,
+                L_StartNorm: norm(first.timestamp),
+                L_EndNorm: norm(last.timestamp),
+                S_Val_First: (first as any).support_price || first.support,
+                S_Val_Last: (last as any).support_price || last.support,
+                Count: sorted.length
+            });
+        }
+    }, [ohlcvData, levelsHistory]);
 
     // 1. Fetch Data
     const fetchData = useCallback(async () => {
@@ -313,12 +351,32 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 }
 
                 if (level) {
+                    // Log first 3 entries to debug
+                    if (supportData.length < 3) {
+                        console.log('[DEBUG] Pushing:', {
+                            candleTime: candle.time,
+                            levelTimestamp: level.timestamp,
+                            support: level.support,
+                            resistance: level.resistance,
+                            levelIdx,
+                            levelKeys: Object.keys(level)
+                        });
+                    }
                     supportData.push({ time: candle.time as Time, value: level.support });
                     resistanceData.push({ time: candle.time as Time, value: level.resistance });
                     ghData.push({ time: candle.time as Time, value: level.gammaHigh });
                     glData.push({ time: candle.time as Time, value: level.gammaLow });
                 }
             }
+
+            // Log summary
+            console.log('[DEBUG] Data pushed:', {
+                supportCount: supportData.length,
+                firstSupport: supportData[0],
+                lastSupport: supportData[supportData.length - 1],
+                firstResistance: resistanceData[0],
+                lastResistance: resistanceData[resistanceData.length - 1]
+            });
 
             levelSeries.support.setData(supportData);
             levelSeries.resistance.setData(resistanceData);
@@ -706,6 +764,17 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     ref={chartContainerRef}
                 // Move events to overlay to prevent interference
                 >
+                    {/* DEBUG OVERLAY */}
+                    {debugInfo && (
+                        <div className="absolute top-16 left-16 z-50 bg-black/90 text-green-400 p-4 text-sm font-mono border border-green-500 rounded shadow-xl pointer-events-none whitespace-pre select-text">
+                            <div>DIAGNOSTICS:</div>
+                            <div>C_Start: {debugInfo.C_Start}</div>
+                            <div>L_Start: {debugInfo.L_StartNorm}</div>
+                            <div>Match? : {debugInfo.L_StartNorm <= debugInfo.C_Start ? "YES" : "NO"}</div>
+                            <div>S_Val  : {debugInfo.S_Val_First} {"->"} {debugInfo.S_Val_Last}</div>
+                            <div>Count  : {debugInfo.Count}</div>
+                        </div>
+                    )}
                     <canvas
                         ref={overlayRef}
                         // Enable pointer events ONLY when drawing or editing
