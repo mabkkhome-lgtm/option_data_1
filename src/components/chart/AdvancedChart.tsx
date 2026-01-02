@@ -768,17 +768,6 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     ref={chartContainerRef}
                 // Move events to overlay to prevent interference
                 >
-                    {/* DEBUG OVERLAY */}
-                    {debugInfo && (
-                        <div className="absolute top-16 left-16 z-50 bg-black/90 text-green-400 p-4 text-sm font-mono border border-green-500 rounded shadow-xl pointer-events-none whitespace-pre select-text">
-                            <div>DIAGNOSTICS:</div>
-                            <div>C_Start: {debugInfo.C_Start}</div>
-                            <div>L_Start: {debugInfo.L_StartNorm}</div>
-                            <div>Match? : {debugInfo.L_StartNorm <= debugInfo.C_Start ? "YES" : "NO"}</div>
-                            <div>S_Val  : {debugInfo.S_Val_First} {"->"} {debugInfo.S_Val_Last}</div>
-                            <div>Count  : {debugInfo.Count}</div>
-                        </div>
-                    )}
                     <canvas
                         ref={overlayRef}
                         // Enable pointer events ONLY when drawing or editing
