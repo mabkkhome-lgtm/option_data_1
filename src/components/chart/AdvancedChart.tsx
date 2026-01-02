@@ -35,6 +35,7 @@ interface AdvancedChartProps {
         gammaLow: number;
     };
     levelsHistory?: LevelHistoryPoint[];
+    onIntervalChange?: (interval: string) => void;
 }
 
 interface ActiveIndicator {
@@ -58,7 +59,8 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     symbol = 'BTCUSDT',
     interval = '15m',
     optionsLevels,
-    levelsHistory = []
+    levelsHistory = [],
+    onIntervalChange
 }) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartInstancesRef = useRef<{
@@ -552,8 +554,18 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                         ))}
                     </div>
                 </div>
-            </div>
 
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsIndicatorModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-[#2a2e39] text-gray-300 hover:text-blue-400 transition-colors"
+                    >
+                        <Activity size={16} />
+                        <span className="text-sm">Indicators</span>
+                        <Plus size={14} className="ml-1 opacity-50" />
+                    </button>
+                </div>
+            </div>
 
 
             {/* Main Area */}
@@ -580,26 +592,19 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 <div
                     className="absolute left-12 top-0 right-0 bottom-0"
                     ref={chartContainerRef}
-                    onClick={(e) => {
-                        if (drawingsLocked) return;
-                        handleContainerClick(e);
-                    }}
-                    onMouseMove={handleMouseMove}
+                // Move events to overlay to prevent interference
                 >
                     <canvas
                         ref={overlayRef}
-                        className={`absolute top-0 left-0 pointer-events-none z-10 ${!drawingsVisible ? 'opacity-0' : ''}`}
+                        // Enable pointer events ONLY when drawing or editing
+                        className={`absolute top-0 left-0 z-10 ${(!drawingsVisible) ? 'opacity-0' : ''} ${activeTool !== 'cursor' ? 'cursor-crosshair' : 'pointer-events-none'}`}
                         width={100} height={100}
+                        onClick={(e) => {
+                            if (drawingsLocked) return;
+                            handleContainerClick(e);
+                        }}
+                        onMouseMove={handleMouseMove}
                     />
-
-                    {/* DEBUG OVERLAY - REMOVE AFTER FIX */}
-                    <div className="absolute top-2 right-2 bg-black/80 text-green-400 p-2 text-xs font-mono z-50 pointer-events-none border border-green-500 rounded">
-                        <div>Dimensions: {chartContainerRef.current?.clientWidth}x{chartContainerRef.current?.clientHeight}</div>
-                        <div>Data: {ohlcvData.length} candles</div>
-                        <div>Loading: {loading.toString()}</div>
-                        <div>Chart Ref: {chartInstancesRef.current ? 'Created' : 'Null'}</div>
-                        <div>Error: {debugError || 'None'}</div>
-                    </div>
                 </div>
             </div>
 

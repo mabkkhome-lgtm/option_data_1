@@ -46,6 +46,7 @@ export default function ChartPage() {
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
     const [chartHeight, setChartHeight] = useState(600);
+    const [interval, setInterval] = useState('15m');
 
     // Set chart height on client side only
     useEffect(() => {
@@ -194,12 +195,12 @@ export default function ChartPage() {
                 <div className="flex-1 relative p-2">
                     <AdvancedChart
                         symbol="BTCUSDT"
-                        interval="15m"
+                        interval={interval}
                         optionsLevels={levels ? {
                             support: levels.support_price,
                             resistance: levels.resistance_price,
                             gammaHigh: levels.gamma_high_price,
-                            gammaLow: levels.gamma_low_price,
+                            gammaLow: levels.gamma_low_price
                         } : undefined}
                         levelsHistory={levelsHistory.map(l => ({
                             timestamp: new Date(l.timestamp).getTime() / 1000,
@@ -208,6 +209,7 @@ export default function ChartPage() {
                             gammaHigh: l.gamma_high_price,
                             gammaLow: l.gamma_low_price,
                         }))}
+                        onIntervalChange={setInterval}
                     />
                 </div>
 
