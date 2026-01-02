@@ -134,10 +134,16 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
     // 2. Initialize Chart
     useEffect(() => {
+        // Skip initialization while still loading data
+        if (loading) return;
+
         if (!chartContainerRef.current) {
-            setDebugError("Container ref is null");
+            setDebugError("Container ref is null after loading");
             return;
         }
+
+        // Clear any previous errors
+        setDebugError(null);
 
         let mainChart: IChartApi | null = null;
         let resizeObserver: ResizeObserver | null = null;
@@ -600,8 +606,8 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                                 key={tf}
                                 onClick={() => onIntervalChange?.(tf)}
                                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${interval === tf
-                                        ? 'bg-[#2962ff] text-white'
-                                        : 'text-gray-400 hover:text-gray-200 hover:bg-[#2a2e39]'
+                                    ? 'bg-[#2962ff] text-white'
+                                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#2a2e39]'
                                     }`}
                             >
                                 {tf}
