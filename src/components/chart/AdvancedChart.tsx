@@ -103,6 +103,10 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     // Update debug info when data changes
     useEffect(() => {
         if (ohlcvData.length > 0 && levelsHistory.length > 0) {
+            // Log the actual structure of first level for debugging
+            console.log('[DEBUG] levelsHistory[0] full object:', levelsHistory[0]);
+            console.log('[DEBUG] levelsHistory[0] keys:', Object.keys(levelsHistory[0]));
+
             // Sort only for reading debug info
             const sorted = [...levelsHistory].sort((a: any, b: any) => {
                 let tA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : a.timestamp;
@@ -127,8 +131,8 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 L_StartRaw: first.timestamp,
                 L_StartNorm: norm(first.timestamp),
                 L_EndNorm: norm(last.timestamp),
-                S_Val_First: (first as any).support_price || first.support,
-                S_Val_Last: (last as any).support_price || last.support,
+                S_Val_First: first.support,  // Direct access, no fallback
+                S_Val_Last: last.support,
                 Count: sorted.length
             });
         }
