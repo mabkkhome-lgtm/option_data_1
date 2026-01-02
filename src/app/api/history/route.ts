@@ -88,6 +88,11 @@ export async function GET() {
             success: true,
             count: normalized.length,
             data: normalized
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'Pragma': 'no-cache'
+            }
         });
 
     } catch (err: any) {

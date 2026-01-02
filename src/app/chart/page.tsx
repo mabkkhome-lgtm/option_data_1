@@ -107,7 +107,11 @@ export default function ChartPage() {
             // Fetch historical levels - increased limit to ensure full history coverage
             // Fetch historical levels via Server API to bypass client limits
             // This ensures we get > 1000 rows and correct timestamps
-            const res = await fetch('/api/history', { cache: 'no-store' });
+            // Fetch with cache-busting to ensure fresh data every time
+            const res = await fetch(`/api/history?t=${Date.now()}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
             if (!res.ok) throw new Error('Failed to fetch history API');
 
             const responseData = await res.json();
