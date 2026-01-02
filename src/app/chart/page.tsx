@@ -39,9 +39,18 @@ interface MarketLevel {
     resistance_price: number;
 }
 
+// API response format (camelCase, normalized)
+interface LevelHistoryItem {
+    timestamp: number;
+    support: number;
+    resistance: number;
+    gammaHigh: number;
+    gammaLow: number;
+}
+
 export default function ChartPage() {
     const [levels, setLevels] = useState<MarketLevel | null>(null);
-    const [levelsHistory, setLevelsHistory] = useState<MarketLevel[]>([]);
+    const [levelsHistory, setLevelsHistory] = useState<LevelHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
@@ -215,11 +224,11 @@ export default function ChartPage() {
                             gammaLow: levels.gamma_low_price
                         } : undefined}
                         levelsHistory={levelsHistory.map(l => ({
-                            timestamp: new Date(l.timestamp).getTime() / 1000,
-                            support: l.support_price,
-                            resistance: l.resistance_price,
-                            gammaHigh: l.gamma_high_price,
-                            gammaLow: l.gamma_low_price,
+                            timestamp: l.timestamp,  // Already normalized by API
+                            support: l.support,      // API returns camelCase
+                            resistance: l.resistance,
+                            gammaHigh: l.gammaHigh,
+                            gammaLow: l.gammaLow,
                         }))}
                         onIntervalChange={setInterval}
                     />
