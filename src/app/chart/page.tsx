@@ -107,6 +107,8 @@ export default function ChartPage() {
 
             if (!historyError && history && history.length > 0) {
                 console.log('[DEBUG] Fetched from API:', history.length);
+                console.log('[PAGE] Raw history[0]:', JSON.stringify(history[0]));
+                console.log('[PAGE] Raw history keys:', Object.keys(history[0]));
 
                 // API returns normalized, filtered, descending data.
                 // We just need to reverse it for the chart (Ascending).
@@ -116,6 +118,9 @@ export default function ChartPage() {
                     if (ts < 1600000000) ts *= 1000;
                     return { ...r, timestamp: ts };
                 });
+
+                console.log('[PAGE] safeHistory[0]:', JSON.stringify(safeHistory[0]));
+                console.log('[PAGE] safeHistory[0].support:', safeHistory[0].support);
 
                 setLevelsHistory(safeHistory);
             }
