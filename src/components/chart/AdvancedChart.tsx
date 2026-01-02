@@ -370,7 +370,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         // Draw all saved drawings
         [...drawings, ...(drawingStateRef.current.currentPoint ? [{
             id: 'temp',
-            type: activeTool === 'fib-retracement' ? 'fib-retracement' : 'trendline',
+            type: activeTool, // Use activeTool directly for temp drawing
             p1: drawingStateRef.current.startPoint!,
             p2: drawingStateRef.current.currentPoint,
             color: '#fff'
@@ -387,42 +387,111 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             const endY = end.y;
 
             ctx.beginPath();
-            ctx.strokeStyle = activeTool === 'fib-retracement' && d.id === 'temp' ? '#aaa' : d.color;
+            ctx.strokeStyle = d.id === 'temp' ? '#fff' : d.color;
             ctx.lineWidth = 2;
+            ctx.fillStyle = d.id === 'temp' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(41, 98, 255, 0.2)';
 
-            if (d.type === 'trendline') {
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(endX, endY);
-                ctx.stroke();
-            } else if (d.type === 'fib-retracement') {
-                // Simple Fib Drawing (0, 0.5, 1)
-                const yDiff = endY - startY;
-                const width = Math.max(200, endX - startX + 100); // Extend right
-
-                const levels = [0, 0.382, 0.5, 0.618, 1];
-                levels.forEach(l => {
-                    const y = startY + yDiff * l;
-                    ctx.beginPath();
-                    ctx.moveTo(startX, y);
-                    ctx.lineTo(startX + width, y);
-                    ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l})`;
+            switch (d.type) {
+                // Lines
+                case 'trendline':
+                case 'measure': // Measure ruler visualized as line for now
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
                     ctx.stroke();
-                    ctx.fillStyle = '#fff';
-                    ctx.fillText(`${l}`, startX + 5, y - 2);
-                });
+                    break;
+                case 'ray':
+                    ctx.moveTo(startX, startY);
+                    // Extend to infinity (canvas width * 2)
+                    const angle = Math.atan2(endY - startY, endX - startX);
+                    ctx.lineTo(startX + Math.cos(angle) * 2000, startY + Math.sin(angle) * 2000);
+                    ctx.stroke();
+                    break;
+                case 'horizontal':
+                    ctx.moveTo(0, startY);
+                    ctx.lineTo(canvas.width, startY);
+                    ctx.stroke();
+                    break;
+                case 'vertical':
+                    ctx.moveTo(startX, 0);
+                    ctx.lineTo(startX, canvas.height);
+                    ctx.stroke();
+                    break;
+                case 'arrow':
+                    // Line
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    // Arrowhead
+                    const headLen = 10;
+                    const angleArrow = Math.atan2(endY - startY, endX - startX);
+                    ctx.beginPath();
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(endX - headLen * Math.cos(angleArrow - Math.PI / 6), endY - headLen * Math.sin(angleArrow - Math.PI / 6));
+                    ctx.lineTo(endX - headLen * Math.cos(angleArrow + Math.PI / 6), endY - headLen * Math.sin(angleArrow + Math.PI / 6));
+                    ctx.fill();
+                    break;
 
-                // Diagonal
-                ctx.beginPath();
-                ctx.setLineDash([5, 5]);
-                ctx.strokeStyle = '#666';
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(endX, endY);
-                ctx.stroke();
-                ctx.setLineDash([]);
+                // Shapes
+                case 'rectangle':
+                    ctx.rect(startX, startY, endX - startX, endY - startY);
+                    ctx.stroke();
+                    ctx.fill();
+                    break;
+                case 'circle':
+                    const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.fill();
+                    break;
+                case 'triangle':
+                    ctx.moveTo(startX, endY); // Bottom Left
+                    ctx.lineTo(endX, endY);   // Bottom Right
+                    ctx.lineTo((startX + endX) / 2, startY); // Top Middle
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.fill();
+                    break;
+
+                // Complex
+                case 'fib-retracement':
+                    const yDiff = endY - startY;
+                    const width = Math.max(200, endX - startX + 100);
+                    const levels = [0, 0.382, 0.5, 0.618, 1];
+                    levels.forEach(l => {
+                        const y = startY + yDiff * l;
+                        ctx.beginPath();
+                        ctx.moveTo(startX, y);
+                        ctx.lineTo(startX + width, y);
+                        ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l})`;
+                        ctx.stroke();
+                        ctx.fillStyle = '#fff';
+                        ctx.fillText(`${l}`, startX + 5, y - 2);
+                    });
+                    // Diagonal
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeStyle = '#666';
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    break;
+
+                default:
+                    // Fallback to Trendline for unknown tools
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    break;
             }
         });
 
     }, [drawings, activeTool, ohlcvData]);
+
+    // Auto-redraw when drawings or tool changes
+    useEffect(() => {
+        requestAnimationFrame(drawOverlay);
+    }, [drawings, drawOverlay]); // Removing activeTool/ohlcvData from here might reduce jitter, but keeping them ensures sync
 
     // Hook up canvas redraw to chart updates
     useEffect(() => {
