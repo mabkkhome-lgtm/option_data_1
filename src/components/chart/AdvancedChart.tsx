@@ -587,18 +587,38 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         <div className="relative w-full h-full flex flex-col bg-[#131722] overflow-hidden">
             {/* Top Toolbar */}
             <div className="h-12 border-b border-gray-800 flex items-center px-4 justify-between bg-[#1e222d] z-30">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-[#2a2e39] relative z-40 bg-[#131722]">
                     <div className="text-gray-100 font-bold">{symbol} · {interval}</div>
                     <div className="h-4 w-px bg-gray-700" />
+                    <div className="text-xs text-gray-500 font-mono">
+                        Tool: {activeTool} | Int: {interval} | Err: {debugError || 'None'}
+                    </div>
 
-                    <button
-                        onClick={() => setIsIndicatorModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-[#2a2e39] text-gray-300 hover:text-blue-400 transition-colors"
-                    >
-                        <Activity size={16} />
-                        <span className="text-sm">Indicators</span>
-                        <Plus size={14} className="ml-1 opacity-50" />
-                    </button>
+                    <div className="flex items-center gap-1 ml-4 bg-[#1e222d] rounded p-0.5">
+                        {['5m', '15m', '1h', '4h', '1d'].map((tf) => (
+                            <button
+                                key={tf}
+                                onClick={() => onIntervalChange?.(tf)}
+                                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${interval === tf
+                                        ? 'bg-[#2962ff] text-white'
+                                        : 'text-gray-400 hover:text-gray-200 hover:bg-[#2a2e39]'
+                                    }`}
+                            >
+                                {tf}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-1 ml-4">
+                        <button
+                            onClick={() => setIsIndicatorModalOpen(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-[#2a2e39] text-gray-300 hover:text-blue-400 transition-colors"
+                        >
+                            <Activity size={16} />
+                            <span className="text-sm">Indicators</span>
+                            <Plus size={14} className="ml-1 opacity-50" />
+                        </button>
+                    </div>
 
                     {/* Active Indicators Chips */}
                     <div className="flex gap-2 ml-4">
