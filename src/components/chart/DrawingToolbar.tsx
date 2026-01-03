@@ -247,23 +247,24 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                                 </div>
                             </button>
 
-                            {/* Expanded Submenu */}
+                            {/* Expanded Submenu - larger and more visible */}
                             {isExpanded && (
-                                <div className="absolute left-full top-0 ml-1 bg-[#1e222d] border border-gray-700 rounded-lg shadow-xl min-w-48 z-50 py-1">
-                                    <div className="px-3 py-2 text-xs text-gray-500 font-medium uppercase border-b border-gray-700">
+                                <div className="absolute left-12 top-0 bg-[#1e222d] border border-gray-600 rounded-lg shadow-2xl min-w-56 z-[100] py-2"
+                                    style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+                                    <div className="px-4 py-2 text-sm text-gray-400 font-semibold uppercase border-b border-gray-700 mb-1">
                                         {category.name}
                                     </div>
                                     {category.tools.map((tool) => (
                                         <button
                                             key={tool.id}
                                             onClick={() => handleToolSelect(tool.id)}
-                                            className={`w-full px-3 py-2 flex items-center gap-3 text-sm transition-colors ${activeTool === tool.id
+                                            className={`w-full px-4 py-3 flex items-center gap-3 text-sm transition-colors ${activeTool === tool.id
                                                 ? 'bg-blue-600 text-white'
-                                                : 'text-gray-300 hover:bg-gray-700'
+                                                : 'text-gray-200 hover:bg-gray-700/80'
                                                 }`}
                                         >
-                                            {tool.icon}
-                                            <span>{tool.name}</span>
+                                            <span className="text-lg">{tool.icon}</span>
+                                            <span className="font-medium">{tool.name}</span>
                                         </button>
                                     ))}
                                 </div>
