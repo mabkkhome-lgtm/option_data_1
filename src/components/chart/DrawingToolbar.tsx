@@ -102,21 +102,6 @@ const TOOL_CATEGORIES: ToolCategory[] = [
         tools: [
             { id: 'fib-retracement', name: 'Fib Retracement', icon: <Percent size={16} /> },
             { id: 'fib-extension', name: 'Fib Extension', icon: <ArrowUpRight size={16} /> },
-            { id: 'fib-channel', name: 'Fib Channel', icon: <GitBranch size={16} /> },
-            { id: 'fib-circles', name: 'Fib Circles', icon: <Circle size={16} /> },
-            { id: 'fib-spiral', name: 'Fib Spiral', icon: <Spline size={16} /> },
-            { id: 'fib-timezone', name: 'Fib Time Zone', icon: <Clock size={16} /> },
-        ]
-    },
-    {
-        id: 'gann',
-        name: 'Gann & Pitchfork',
-        icon: <Waves size={18} />,
-        tools: [
-            { id: 'pitchfork', name: 'Pitchfork', icon: <GitBranch size={16} /> },
-            { id: 'gann-fan', name: 'Gann Fan', icon: <Waves size={16} /> },
-            { id: 'gann-square', name: 'Gann Square', icon: <Square size={16} /> },
-            { id: 'schiff-pitchfork', name: 'Schiff Pitchfork', icon: <GitBranch size={16} /> },
         ]
     },
     {
@@ -128,77 +113,25 @@ const TOOL_CATEGORIES: ToolCategory[] = [
             { id: 'circle', name: 'Circle', icon: <Circle size={16} /> },
             { id: 'ellipse', name: 'Ellipse', icon: <Circle size={16} /> },
             { id: 'triangle', name: 'Triangle', icon: <Triangle size={16} /> },
-            { id: 'arc', name: 'Arc', icon: <Spline size={16} /> },
-            { id: 'polyline', name: 'Polyline', icon: <Spline size={16} /> },
-        ]
-    },
-    {
-        id: 'patterns',
-        name: 'Patterns',
-        icon: <Hash size={18} />,
-        tools: [
-            { id: 'head-shoulders', name: 'Head & Shoulders', icon: <Waves size={16} /> },
-            { id: 'abcd', name: 'ABCD Pattern', icon: <Hash size={16} /> },
-            { id: 'xabcd', name: 'XABCD Pattern', icon: <Hash size={16} /> },
-            { id: 'three-drives', name: 'Three Drives', icon: <Hash size={16} /> },
-            { id: 'elliott-wave', name: 'Elliott Wave', icon: <Waves size={16} /> },
-            { id: 'cypher', name: 'Cypher Pattern', icon: <Hash size={16} /> },
-        ]
-    },
-    {
-        id: 'forecast',
-        name: 'Forecast & Projection',
-        icon: <TrendingUp size={18} />,
-        tools: [
-            { id: 'forecast', name: 'Forecast', icon: <TrendingUp size={16} /> },
-            { id: 'bars-pattern', name: 'Bars Pattern', icon: <Hash size={16} /> },
-            { id: 'ghost-feed', name: 'Ghost Feed', icon: <Activity size={16} /> },
-            { id: 'projection', name: 'Projection', icon: <Triangle size={16} /> },
-        ]
-    },
-    {
-        id: 'volume',
-        name: 'Volume-Based',
-        icon: <Activity size={18} />,
-        tools: [
-            { id: 'anchored-vwap', name: 'Anchored VWAP', icon: <Activity size={16} /> },
-            { id: 'fixed-volume-profile', name: 'Fixed Range Volume Profile', icon: <Hash size={16} /> },
-            { id: 'anchored-volume-profile', name: 'Anchored Volume Profile', icon: <Hash size={16} /> },
         ]
     },
     {
         id: 'measure',
-        name: 'Measurers',
+        name: 'Measure',
         icon: <Ruler size={18} />,
         tools: [
-            { id: 'price-range-measure', name: 'Price Range', icon: <MoveVertical size={16} /> },
-            { id: 'date-range-measure', name: 'Date Range', icon: <MoveHorizontal size={16} /> },
-            { id: 'date-price-range', name: 'Date and Price Range', icon: <Ruler size={16} /> },
-            { id: 'measure', name: 'Measure Tool', icon: <Ruler size={16} /> },
+            { id: 'measure', name: 'Measure', icon: <Ruler size={16} /> },
             { id: 'long-position', name: 'Long Position', icon: <TrendingUp size={16} /> },
             { id: 'short-position', name: 'Short Position', icon: <TrendingUp size={16} style={{ transform: 'scaleY(-1)' }} /> },
         ]
     },
     {
         id: 'annotations',
-        name: 'Text & Annotations',
+        name: 'Text',
         icon: <Type size={18} />,
         tools: [
             { id: 'text', name: 'Text', icon: <Type size={16} /> },
-            { id: 'callout', name: 'Callout', icon: <Type size={16} /> },
             { id: 'price-label', name: 'Price Label', icon: <Target size={16} /> },
-            { id: 'arrow-marker', name: 'Arrow Marker', icon: <ArrowUpRight size={16} /> },
-            { id: 'note', name: 'Note', icon: <Type size={16} /> },
-            { id: 'signpost', name: 'Signpost', icon: <Type size={16} /> },
-        ]
-    },
-    {
-        id: 'brushes',
-        name: 'Brushes',
-        icon: <PenLine size={18} />,
-        tools: [
-            { id: 'brush', name: 'Brush', icon: <PenLine size={16} /> },
-            { id: 'highlighter', name: 'Highlighter', icon: <PenLine size={16} /> },
         ]
     },
 ];
