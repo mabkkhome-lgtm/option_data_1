@@ -247,10 +247,17 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                                 </div>
                             </button>
 
-                            {/* Expanded Submenu - larger and more visible */}
+                            {/* Expanded Submenu - positioned to the RIGHT of toolbar */}
                             {isExpanded && (
-                                <div className="absolute left-12 top-0 bg-[#1e222d] border border-gray-600 rounded-lg shadow-2xl min-w-56 z-[100] py-2"
-                                    style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+                                <div
+                                    className="fixed bg-[#1e222d] border border-gray-500 rounded-lg shadow-2xl min-w-64 z-[9999] py-2"
+                                    style={{
+                                        left: '60px',
+                                        top: 'auto',
+                                        boxShadow: '0 10px 40px rgba(0,0,0,0.7)',
+                                        marginTop: '-10px'
+                                    }}
+                                >
                                     <div className="px-4 py-2 text-sm text-gray-400 font-semibold uppercase border-b border-gray-700 mb-1">
                                         {category.name}
                                     </div>
