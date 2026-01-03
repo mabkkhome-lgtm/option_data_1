@@ -534,16 +534,35 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             switch (d.type) {
                 // Lines
                 case 'trendline':
-                case 'measure': // Measure ruler visualized as line for now
+                case 'measure':
+                case 'price-range-measure':
+                case 'date-range-measure':
+                case 'date-price-range':
                     ctx.moveTo(startX, startY);
                     ctx.lineTo(endX, endY);
                     ctx.stroke();
+                    // For measure tools, show distance label
+                    if (d.type.includes('measure') || d.type.includes('range')) {
+                        const midX = (startX + endX) / 2;
+                        const midY = (startY + endY) / 2;
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '12px Arial';
+                        const dx = Math.abs(endX - startX);
+                        const dy = Math.abs(endY - startY);
+                        ctx.fillText(`Δ ${dx.toFixed(0)}x${dy.toFixed(0)}`, midX, midY - 5);
+                    }
                     break;
                 case 'ray':
                     ctx.moveTo(startX, startY);
-                    // Extend to infinity (canvas width * 2)
-                    const angle = Math.atan2(endY - startY, endX - startX);
-                    ctx.lineTo(startX + Math.cos(angle) * 2000, startY + Math.sin(angle) * 2000);
+                    const angleRay = Math.atan2(endY - startY, endX - startX);
+                    ctx.lineTo(startX + Math.cos(angleRay) * 2000, startY + Math.sin(angleRay) * 2000);
+                    ctx.stroke();
+                    break;
+                case 'extended':
+                    // Extend line in both directions
+                    const angleExt = Math.atan2(endY - startY, endX - startX);
+                    ctx.moveTo(startX - Math.cos(angleExt) * 2000, startY - Math.sin(angleExt) * 2000);
+                    ctx.lineTo(startX + Math.cos(angleExt) * 2000, startY + Math.sin(angleExt) * 2000);
                     ctx.stroke();
                     break;
                 case 'horizontal':
@@ -556,12 +575,21 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     ctx.lineTo(startX, canvas.height);
                     ctx.stroke();
                     break;
+                case 'parallel':
+                    // Draw two parallel lines
+                    const dist = Math.abs(endY - startY);
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, startY);
+                    ctx.moveTo(startX, endY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    // Fill between
+                    ctx.fillRect(Math.min(startX, endX), Math.min(startY, endY), Math.abs(endX - startX), Math.abs(endY - startY));
+                    break;
                 case 'arrow':
-                    // Line
                     ctx.moveTo(startX, startY);
                     ctx.lineTo(endX, endY);
                     ctx.stroke();
-                    // Arrowhead
                     const headLen = 10;
                     const angleArrow = Math.atan2(endY - startY, endX - startX);
                     ctx.beginPath();
@@ -578,36 +606,60 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     ctx.fill();
                     break;
                 case 'circle':
-                    const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-                    ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+                    const radiusC = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    ctx.arc(startX, startY, radiusC, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.fill();
+                    break;
+                case 'ellipse':
+                    const radiusX = Math.abs(endX - startX);
+                    const radiusY = Math.abs(endY - startY);
+                    ctx.ellipse((startX + endX) / 2, (startY + endY) / 2, radiusX / 2, radiusY / 2, 0, 0, 2 * Math.PI);
                     ctx.stroke();
                     ctx.fill();
                     break;
                 case 'triangle':
-                    ctx.moveTo(startX, endY); // Bottom Left
-                    ctx.lineTo(endX, endY);   // Bottom Right
-                    ctx.lineTo((startX + endX) / 2, startY); // Top Middle
+                    ctx.moveTo(startX, endY);
+                    ctx.lineTo(endX, endY);
+                    ctx.lineTo((startX + endX) / 2, startY);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.fill();
                     break;
+                case 'arc':
+                    const arcRadius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    const startAngle = Math.atan2(endY - startY, endX - startX);
+                    ctx.arc(startX, startY, arcRadius, startAngle, startAngle + Math.PI);
+                    ctx.stroke();
+                    break;
+                case 'polyline':
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    // Draw points
+                    ctx.fillStyle = d.color;
+                    ctx.beginPath();
+                    ctx.arc(startX, startY, 4, 0, 2 * Math.PI);
+                    ctx.arc(endX, endY, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    break;
 
-                // Complex
+                // Fibonacci
                 case 'fib-retracement':
                     const yDiff = endY - startY;
-                    const width = Math.max(200, endX - startX + 100);
-                    const levels = [0, 0.382, 0.5, 0.618, 1];
+                    const fibWidth = Math.max(200, endX - startX + 100);
+                    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
                     levels.forEach(l => {
                         const y = startY + yDiff * l;
                         ctx.beginPath();
                         ctx.moveTo(startX, y);
-                        ctx.lineTo(startX + width, y);
-                        ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l})`;
+                        ctx.lineTo(startX + fibWidth, y);
+                        ctx.strokeStyle = `rgba(33, 150, 243, ${1 - l * 0.5})`;
                         ctx.stroke();
                         ctx.fillStyle = '#fff';
-                        ctx.fillText(`${l}`, startX + 5, y - 2);
+                        ctx.font = '11px Arial';
+                        ctx.fillText(`${(l * 100).toFixed(1)}%`, startX + 5, y - 2);
                     });
-                    // Diagonal
                     ctx.beginPath();
                     ctx.setLineDash([5, 5]);
                     ctx.strokeStyle = '#666';
@@ -616,9 +668,144 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     ctx.stroke();
                     ctx.setLineDash([]);
                     break;
+                case 'fib-extension':
+                    const extLevels = [0, 0.618, 1, 1.618, 2.618, 4.236];
+                    const extYDiff = endY - startY;
+                    extLevels.forEach(l => {
+                        const y = startY + extYDiff * l;
+                        ctx.beginPath();
+                        ctx.moveTo(startX, y);
+                        ctx.lineTo(endX + 150, y);
+                        ctx.strokeStyle = l > 1 ? '#ff9800' : '#2196f3';
+                        ctx.stroke();
+                        ctx.fillStyle = '#fff';
+                        ctx.fillText(`${(l * 100).toFixed(1)}%`, startX + 5, y - 2);
+                    });
+                    break;
+
+                // Patterns (simplified visualization)
+                case 'head-shoulders':
+                case 'abcd':
+                case 'xabcd':
+                case 'three-drives':
+                case 'cypher':
+                    // Draw pattern as connected points
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo((startX + endX) / 2, endY);
+                    ctx.lineTo(endX, startY);
+                    ctx.stroke();
+                    ctx.fillStyle = d.color;
+                    ctx.beginPath();
+                    ctx.arc(startX, startY, 5, 0, 2 * Math.PI);
+                    ctx.arc((startX + endX) / 2, endY, 5, 0, 2 * Math.PI);
+                    ctx.arc(endX, startY, 5, 0, 2 * Math.PI);
+                    ctx.fill();
+                    break;
+                case 'elliott-wave':
+                    // Simplified wave visualization
+                    const waveWidth = (endX - startX) / 5;
+                    ctx.moveTo(startX, startY);
+                    for (let i = 1; i <= 5; i++) {
+                        const waveY = i % 2 === 0 ? startY : endY;
+                        ctx.lineTo(startX + waveWidth * i, waveY);
+                    }
+                    ctx.stroke();
+                    break;
+
+                // Forecast & Projection
+                case 'forecast':
+                case 'projection':
+                    ctx.setLineDash([5, 5]);
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    // Extend projection
+                    const projAngle = Math.atan2(endY - startY, endX - startX);
+                    ctx.lineTo(endX + Math.cos(projAngle) * 100, endY + Math.sin(projAngle) * 100);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    break;
+                case 'bars-pattern':
+                case 'ghost-feed':
+                    ctx.setLineDash([3, 3]);
+                    ctx.globalAlpha = 0.5;
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.setLineDash([]);
+                    break;
+
+                // Volume-Based
+                case 'anchored-vwap':
+                    ctx.setLineDash([2, 2]);
+                    ctx.strokeStyle = '#9c27b0';
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(canvas.width, startY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#9c27b0';
+                    ctx.fillText('VWAP', startX + 5, startY - 5);
+                    break;
+                case 'fixed-volume-profile':
+                case 'anchored-volume-profile':
+                    // Simplified volume profile visualization
+                    ctx.fillStyle = 'rgba(156, 39, 176, 0.3)';
+                    ctx.fillRect(startX, startY, (endX - startX) * 0.7, endY - startY);
+                    ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+                    break;
+
+                // Position tools
+                case 'long-position':
+                    ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
+                    ctx.fillRect(startX, Math.min(startY, endY), endX - startX, Math.abs(endY - startY));
+                    ctx.strokeStyle = '#4caf50';
+                    ctx.strokeRect(startX, Math.min(startY, endY), endX - startX, Math.abs(endY - startY));
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('LONG', startX + 5, Math.min(startY, endY) + 15);
+                    break;
+                case 'short-position':
+                    ctx.fillStyle = 'rgba(244, 67, 54, 0.3)';
+                    ctx.fillRect(startX, Math.min(startY, endY), endX - startX, Math.abs(endY - startY));
+                    ctx.strokeStyle = '#f44336';
+                    ctx.strokeRect(startX, Math.min(startY, endY), endX - startX, Math.abs(endY - startY));
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('SHORT', startX + 5, Math.min(startY, endY) + 15);
+                    break;
+
+                // Gann & Pitchfork
+                case 'pitchfork':
+                case 'schiff-pitchfork':
+                    const midPitchX = (startX + endX) / 2;
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(midPitchX, endY);
+                    ctx.moveTo(endX, startY);
+                    ctx.lineTo(midPitchX, endY);
+                    ctx.moveTo(midPitchX, startY);
+                    ctx.lineTo(midPitchX, endY + 200);
+                    ctx.stroke();
+                    break;
+                case 'gann-fan':
+                    const gannAngles = [1 / 8, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3, 4, 8];
+                    gannAngles.forEach(ratio => {
+                        ctx.beginPath();
+                        ctx.moveTo(startX, startY);
+                        ctx.lineTo(endX, startY + (endX - startX) * ratio);
+                        ctx.stroke();
+                    });
+                    break;
+                case 'gann-square':
+                    const size = Math.max(Math.abs(endX - startX), Math.abs(endY - startY));
+                    ctx.strokeRect(startX, startY, size, size);
+                    // Diagonals
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(startX + size, startY + size);
+                    ctx.moveTo(startX + size, startY);
+                    ctx.lineTo(startX, startY + size);
+                    ctx.stroke();
+                    break;
 
                 default:
-                    // Fallback to Trendline for unknown tools
+                    // Fallback to Trendline
                     ctx.moveTo(startX, startY);
                     ctx.lineTo(endX, endY);
                     ctx.stroke();
