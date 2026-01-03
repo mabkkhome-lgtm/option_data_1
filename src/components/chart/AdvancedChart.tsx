@@ -595,23 +595,37 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
     // Handle container clicks for drawing
     const handleContainerClick = (e: React.MouseEvent) => {
-        if (activeTool === 'cursor') return;
+        console.log('[DRAW] Click detected, activeTool:', activeTool);
+
+        if (activeTool === 'cursor') {
+            console.log('[DRAW] Cursor mode, ignoring');
+            return;
+        }
 
         const chart = chartInstancesRef.current?.mainChart;
         const series = chartInstancesRef.current?.candleSeries;
-        if (!chart || !series || !chartContainerRef.current) return;
+        if (!chart || !series || !chartContainerRef.current) {
+            console.log('[DRAW] Missing refs:', { chart: !!chart, series: !!series, container: !!chartContainerRef.current });
+            return;
+        }
 
         const rect = chartContainerRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
+        console.log('[DRAW] Click coords:', { x, y, rectWidth: rect.width, rectHeight: rect.height });
 
         const time = chart.timeScale().coordinateToTime(x) as number;
         const price = series.coordinateToPrice(y);
+        console.log('[DRAW] Converted:', { time, price });
 
-        if (!time || !price) return;
+        if (!time || price === null) {
+            console.log('[DRAW] Invalid time/price, aborting');
+            return;
+        }
 
         if (!drawingStateRef.current.isDrawing) {
             // Start Drawing
+            console.log('[DRAW] Starting drawing at', { time, price });
             drawingStateRef.current = {
                 isDrawing: true,
                 startPoint: { time, price },
@@ -619,6 +633,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             };
         } else {
             // Finish Drawing
+            console.log('[DRAW] Finishing drawing at', { time, price });
             const newDrawing: Drawing = {
                 id: Date.now().toString(),
                 type: activeTool === 'fib-retracement' ? 'fib-retracement' : activeTool as DrawingTool,
@@ -770,11 +785,16 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 >
                     <canvas
                         ref={overlayRef}
-                        // Enable pointer events ONLY when drawing or editing
-                        className={`absolute top-0 left-0 z-10 ${(!drawingsVisible) ? 'opacity-0' : ''} ${activeTool !== 'cursor' ? 'cursor-crosshair' : 'pointer-events-none'}`}
-                        width={100} height={100}
+                        // Enable pointer events when a drawing tool is selected (not cursor)
+                        className={`absolute top-0 left-0 w-full h-full z-10 ${!drawingsVisible ? 'opacity-0' : ''
+                            } ${activeTool !== 'cursor' && !drawingsLocked
+                                ? 'cursor-crosshair'
+                                : 'pointer-events-none'
+                            }`}
+                        style={{ width: '100%', height: '100%' }}
                         onClick={(e) => {
                             if (drawingsLocked) return;
+                            if (activeTool === 'cursor') return;
                             handleContainerClick(e);
                         }}
                         onMouseMove={handleMouseMove}

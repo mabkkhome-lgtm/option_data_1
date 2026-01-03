@@ -3,12 +3,14 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import {
     ReactFlow,
+    ReactFlowProvider,
     Background,
     Controls,
     MiniMap,
     addEdge,
     useNodesState,
     useEdgesState,
+    useReactFlow,
     type OnConnect,
     type Node,
     type Edge,
@@ -79,7 +81,8 @@ function loadSavedLayout(): { nodes: Node[]; edges: Edge[]; connections: { sourc
     return { nodes: [], edges: [], connections: [] };
 }
 
-export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
+// Inner component that has access to useReactFlow
+function DashboardCanvasInner({ onNodeAdd }: DashboardCanvasProps) {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [isInitialized, setIsInitialized] = useState(false);
     const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
@@ -90,6 +93,9 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
         flowX: number;
         flowY: number;
     } | null>(null);
+
+    // Get ReactFlow instance for coordinate conversion
+    const { screenToFlowPosition } = useReactFlow();
 
     // Get store functions for connection management
     const { addConnection, removeConnection } = useTradesSelectionStore();
@@ -163,21 +169,20 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
         });
     }, [removeConnection]);
 
-    // Handle right-click to show context menu
+    // Handle right-click to show context menu - FIXED: Use screenToFlowPosition
     const onPaneContextMenu = useCallback(
         (event: MouseEvent | React.MouseEvent) => {
             event.preventDefault();
-            const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-            if (bounds) {
-                setContextMenu({
-                    x: event.clientX,
-                    y: event.clientY,
-                    flowX: event.clientX - bounds.left,
-                    flowY: event.clientY - bounds.top,
-                });
-            }
+            // Convert screen coordinates to flow coordinates (accounts for zoom/pan)
+            const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+            setContextMenu({
+                x: event.clientX,
+                y: event.clientY,
+                flowX: flowPos.x,
+                flowY: flowPos.y,
+            });
         },
-        []
+        [screenToFlowPosition]
     );
 
     // Close context menu
@@ -391,5 +396,14 @@ export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
                 />
             )}
         </div>
+    );
+}
+
+// Wrapper component that provides ReactFlowProvider
+export function DashboardCanvas({ onNodeAdd }: DashboardCanvasProps) {
+    return (
+        <ReactFlowProvider>
+            <DashboardCanvasInner onNodeAdd={onNodeAdd} />
+        </ReactFlowProvider>
     );
 }

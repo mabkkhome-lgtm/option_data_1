@@ -137,9 +137,10 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
     useEffect(() => {
         setIsMounted(true);
 
-        // Load saved filters from localStorage
+        // Load saved filters from localStorage (PER-WIDGET using widgetId)
+        const storageKey = `market-screener-${widgetId}`;
         try {
-            const saved = localStorage.getItem('market-screener-filters');
+            const saved = localStorage.getItem(storageKey);
             if (saved) {
                 const filters = JSON.parse(saved);
                 if (filters.currency) setCurrency(filters.currency);
@@ -148,28 +149,33 @@ export function MarketScreenerWidget({ widgetId }: MarketScreenerProps) {
                 if (typeof filters.minSize === 'number') setMinSize(filters.minSize);
                 if (filters.strategyFilter) setStrategyFilter(filters.strategyFilter);
                 if (filters.sourceLabel) setSourceLabel(filters.sourceLabel);
+                if (filters.activePreset) setActivePreset(filters.activePreset);
+                if (filters.expiryFilter) setExpiryFilter(filters.expiryFilter);
             }
         } catch (e) {
             console.warn('[MarketScreener] Failed to load saved filters:', e);
         }
-    }, []);
+    }, [widgetId]);
 
-    // Save filters to localStorage when they change
+    // Save filters to localStorage when they change (PER-WIDGET)
     useEffect(() => {
         if (!isMounted) return;
+        const storageKey = `market-screener-${widgetId}`;
         try {
-            localStorage.setItem('market-screener-filters', JSON.stringify({
+            localStorage.setItem(storageKey, JSON.stringify({
                 currency,
                 typeFilter,
                 sideFilter,
                 minSize,
                 strategyFilter,
                 sourceLabel,
+                activePreset,
+                expiryFilter,
             }));
         } catch (e) {
             console.warn('[MarketScreener] Failed to save filters:', e);
         }
-    }, [isMounted, currency, typeFilter, sideFilter, minSize, strategyFilter, sourceLabel]);
+    }, [isMounted, widgetId, currency, typeFilter, sideFilter, minSize, strategyFilter, sourceLabel, activePreset, expiryFilter]);
 
     // Track if we've set default expiry
     const [hasSetDefaultExpiry, setHasSetDefaultExpiry] = useState(false);

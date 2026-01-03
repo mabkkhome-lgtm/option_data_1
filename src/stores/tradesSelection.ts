@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ScreenerRow } from '@/components/widgets/MarketScreener';
 
 /**
@@ -56,145 +57,172 @@ interface TradesSelectionState {
     clearAllSources: () => void;
 }
 
-export const useTradesSelectionStore = create<TradesSelectionState>((set, get) => ({
-    sources: new Map(),
-    connections: [],
-    selectedTrades: [],
+export const useTradesSelectionStore = create<TradesSelectionState>()(
+    persist(
+        (set, get) => ({
+            sources: new Map(),
+            connections: [],
+            selectedTrades: [],
 
-    // Set trades from a specific source with label
-    setSourceTrades: (sourceId, label, trades, color) => set((state) => {
-        const newSources = new Map(state.sources);
-        newSources.set(sourceId, { sourceId, label, trades, color });
+            // Set trades from a specific source with label
+            setSourceTrades: (sourceId, label, trades, color) => set((state) => {
+                const newSources = new Map(state.sources);
+                newSources.set(sourceId, { sourceId, label, trades, color });
 
-        // Combine all sources into selectedTrades (backward compat)
-        const allTrades: ScreenerRow[] = [];
-        newSources.forEach(source => {
-            allTrades.push(...source.trades);
-        });
+                // Combine all sources into selectedTrades (backward compat)
+                const allTrades: ScreenerRow[] = [];
+                newSources.forEach(source => {
+                    allTrades.push(...source.trades);
+                });
 
-        const uniqueTrades = allTrades.filter((trade, index, self) =>
-            index === self.findIndex(t => t.id === trade.id)
-        );
+                const uniqueTrades = allTrades.filter((trade, index, self) =>
+                    index === self.findIndex(t => t.id === trade.id)
+                );
 
-        return {
-            sources: newSources,
-            selectedTrades: uniqueTrades
-        };
-    }),
+                return {
+                    sources: newSources,
+                    selectedTrades: uniqueTrades
+                };
+            }),
 
-    // Remove a source
-    removeSource: (sourceId) => set((state) => {
-        const newSources = new Map(state.sources);
-        newSources.delete(sourceId);
+            // Remove a source
+            removeSource: (sourceId) => set((state) => {
+                const newSources = new Map(state.sources);
+                newSources.delete(sourceId);
 
-        // Also remove connections from this source
-        const newConnections = state.connections.filter(c => c.sourceId !== sourceId);
+                // Also remove connections from this source
+                const newConnections = state.connections.filter(c => c.sourceId !== sourceId);
 
-        const allTrades: ScreenerRow[] = [];
-        newSources.forEach(source => {
-            allTrades.push(...source.trades);
-        });
+                const allTrades: ScreenerRow[] = [];
+                newSources.forEach(source => {
+                    allTrades.push(...source.trades);
+                });
 
-        const uniqueTrades = allTrades.filter((trade, index, self) =>
-            index === self.findIndex(t => t.id === trade.id)
-        );
+                const uniqueTrades = allTrades.filter((trade, index, self) =>
+                    index === self.findIndex(t => t.id === trade.id)
+                );
 
-        return {
-            sources: newSources,
-            connections: newConnections,
-            selectedTrades: uniqueTrades
-        };
-    }),
+                return {
+                    sources: newSources,
+                    connections: newConnections,
+                    selectedTrades: uniqueTrades
+                };
+            }),
 
-    // Add a connection between source and target
-    addConnection: (sourceId, targetId) => set((state) => {
-        // Avoid duplicates
-        const exists = state.connections.some(
-            c => c.sourceId === sourceId && c.targetId === targetId
-        );
-        if (exists) return state;
+            // Add a connection between source and target
+            addConnection: (sourceId, targetId) => set((state) => {
+                // Avoid duplicates
+                const exists = state.connections.some(
+                    c => c.sourceId === sourceId && c.targetId === targetId
+                );
+                if (exists) return state;
 
-        console.log('[Store] Adding connection:', sourceId, '->', targetId);
-        return {
-            connections: [...state.connections, { sourceId, targetId }]
-        };
-    }),
+                console.log('[Store] Adding connection:', sourceId, '->', targetId);
+                return {
+                    connections: [...state.connections, { sourceId, targetId }]
+                };
+            }),
 
-    // Remove a connection
-    removeConnection: (sourceId, targetId) => set((state) => ({
-        connections: state.connections.filter(
-            c => !(c.sourceId === sourceId && c.targetId === targetId)
-        )
-    })),
+            // Remove a connection
+            removeConnection: (sourceId, targetId) => set((state) => ({
+                connections: state.connections.filter(
+                    c => !(c.sourceId === sourceId && c.targetId === targetId)
+                )
+            })),
 
-    // Clear all connections
-    clearConnections: () => set({ connections: [] }),
+            // Clear all connections
+            clearConnections: () => set({ connections: [] }),
 
-    // Get trades for a specific target (visualizer)
-    getTradesForTarget: (targetId) => {
-        const state = get();
-        const connectedSources = state.connections
-            .filter(c => c.targetId === targetId)
-            .map(c => c.sourceId);
+            // Get trades for a specific target (visualizer)
+            getTradesForTarget: (targetId) => {
+                const state = get();
+                const connectedSources = state.connections
+                    .filter(c => c.targetId === targetId)
+                    .map(c => c.sourceId);
 
-        // If no connections, return all trades (backward compat)
-        if (connectedSources.length === 0) {
-            return state.selectedTrades;
+                // If no connections, return all trades (backward compat)
+                if (connectedSources.length === 0) {
+                    return state.selectedTrades;
+                }
+
+                // Otherwise, return only trades from connected sources
+                const trades: ScreenerRow[] = [];
+                connectedSources.forEach(sid => {
+                    const source = state.sources.get(sid);
+                    if (source) {
+                        trades.push(...source.trades);
+                    }
+                });
+
+                // Deduplicate
+                return trades.filter((trade, index, self) =>
+                    index === self.findIndex(t => t.id === trade.id)
+                );
+            },
+
+            // Get sources for a specific target (for showing labels/colors)
+            getSourcesForTarget: (targetId) => {
+                const state = get();
+                const connectedSources = state.connections
+                    .filter(c => c.targetId === targetId)
+                    .map(c => c.sourceId);
+
+                // If no connections, return all sources
+                if (connectedSources.length === 0) {
+                    return Array.from(state.sources.values());
+                }
+
+                return connectedSources
+                    .map(sid => state.sources.get(sid))
+                    .filter((s): s is TradeSource => s !== undefined);
+            },
+
+            // Legacy actions
+            clearAllSources: () => set({ sources: new Map(), selectedTrades: [], connections: [] }),
+
+            setSelectedTrades: (trades) => set((state) => {
+                const newSources = new Map(state.sources);
+                newSources.set('default', { sourceId: 'default', label: 'Default', trades });
+                return {
+                    sources: newSources,
+                    selectedTrades: trades
+                };
+            }),
+
+            addTrades: (trades) => set((state) => ({
+                selectedTrades: [...state.selectedTrades, ...trades.filter(
+                    t => !state.selectedTrades.some(st => st.id === t.id)
+                )]
+            })),
+
+            removeTrades: (tradeIds) => set((state) => ({
+                selectedTrades: state.selectedTrades.filter(t => !tradeIds.includes(t.id))
+            })),
+
+            clearSelection: () => set({ selectedTrades: [], sources: new Map(), connections: [] }),
+        }),
+        {
+            name: 'oss-trades-selection',
+            // Only persist connections, not the actual trade data (which is fetched fresh)
+            partialize: (state) => ({
+                connections: state.connections,
+            }),
+            // Custom storage to handle Map serialization
+            storage: {
+                getItem: (name) => {
+                    const str = localStorage.getItem(name);
+                    if (!str) return null;
+                    try {
+                        return JSON.parse(str);
+                    } catch {
+                        return null;
+                    }
+                },
+                setItem: (name, value) => {
+                    localStorage.setItem(name, JSON.stringify(value));
+                },
+                removeItem: (name) => localStorage.removeItem(name),
+            },
         }
-
-        // Otherwise, return only trades from connected sources
-        const trades: ScreenerRow[] = [];
-        connectedSources.forEach(sid => {
-            const source = state.sources.get(sid);
-            if (source) {
-                trades.push(...source.trades);
-            }
-        });
-
-        // Deduplicate
-        return trades.filter((trade, index, self) =>
-            index === self.findIndex(t => t.id === trade.id)
-        );
-    },
-
-    // Get sources for a specific target (for showing labels/colors)
-    getSourcesForTarget: (targetId) => {
-        const state = get();
-        const connectedSources = state.connections
-            .filter(c => c.targetId === targetId)
-            .map(c => c.sourceId);
-
-        // If no connections, return all sources
-        if (connectedSources.length === 0) {
-            return Array.from(state.sources.values());
-        }
-
-        return connectedSources
-            .map(sid => state.sources.get(sid))
-            .filter((s): s is TradeSource => s !== undefined);
-    },
-
-    // Legacy actions
-    clearAllSources: () => set({ sources: new Map(), selectedTrades: [], connections: [] }),
-
-    setSelectedTrades: (trades) => set((state) => {
-        const newSources = new Map(state.sources);
-        newSources.set('default', { sourceId: 'default', label: 'Default', trades });
-        return {
-            sources: newSources,
-            selectedTrades: trades
-        };
-    }),
-
-    addTrades: (trades) => set((state) => ({
-        selectedTrades: [...state.selectedTrades, ...trades.filter(
-            t => !state.selectedTrades.some(st => st.id === t.id)
-        )]
-    })),
-
-    removeTrades: (tradeIds) => set((state) => ({
-        selectedTrades: state.selectedTrades.filter(t => !tradeIds.includes(t.id))
-    })),
-
-    clearSelection: () => set({ selectedTrades: [], sources: new Map(), connections: [] }),
-}));
+    )
+);
