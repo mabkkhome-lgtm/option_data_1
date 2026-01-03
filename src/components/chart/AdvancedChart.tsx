@@ -55,6 +55,37 @@ interface Drawing {
 
 const COLORS = ['#2962ff', '#e91e63', '#9c27b0', '#673ab7', '#00bcd4', '#009688', '#ffeb3b', '#ff9800'];
 
+// Helper function to calculate distance from point to line segment
+const distanceToLineSegment = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+
+    if (lenSq !== 0) param = dot / lenSq;
+
+    let xx, yy;
+
+    if (param < 0) {
+        xx = x1;
+        yy = y1;
+    } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+    } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+    }
+
+    const dx = px - xx;
+    const dy = py - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+
 const AdvancedChart: React.FC<AdvancedChartProps> = ({
     symbol = 'BTCUSDT',
     interval = '15m',
@@ -97,6 +128,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     const [drawings, setDrawings] = useState<Drawing[]>([]);
     const [drawingsVisible, setDrawingsVisible] = useState(true);
     const [drawingsLocked, setDrawingsLocked] = useState(false);
+    const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
 
     // DEBUG STATE (Moved here)
     const [debugInfo, setDebugInfo] = useState<any>(null);
@@ -493,8 +525,10 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             const endY = end.y;
 
             ctx.beginPath();
-            ctx.strokeStyle = d.id === 'temp' ? '#fff' : d.color;
-            ctx.lineWidth = 2;
+            // Highlight selected drawing
+            const isSelected = d.id === selectedDrawingId;
+            ctx.strokeStyle = isSelected ? '#ff9800' : (d.id === 'temp' ? '#fff' : d.color);
+            ctx.lineWidth = isSelected ? 3 : 2;
             ctx.fillStyle = d.id === 'temp' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(41, 98, 255, 0.2)';
 
             switch (d.type) {
@@ -592,7 +626,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
             }
         });
 
-    }, [drawings, activeTool, ohlcvData]);
+    }, [drawings, activeTool, ohlcvData, selectedDrawingId]);
 
     // Auto-redraw when drawings or tool changes
     useEffect(() => {
@@ -618,21 +652,49 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     const handleContainerClick = (e: React.MouseEvent) => {
         console.log('[DRAW] Click detected, activeTool:', activeTool);
 
-        if (activeTool === 'cursor') {
-            console.log('[DRAW] Cursor mode, ignoring');
-            return;
-        }
-
         const chart = chartInstancesRef.current?.mainChart;
         const series = chartInstancesRef.current?.candleSeries;
         if (!chart || !series || !chartContainerRef.current) {
-            console.log('[DRAW] Missing refs:', { chart: !!chart, series: !!series, container: !!chartContainerRef.current });
+            console.log('[DRAW] Missing refs');
             return;
         }
 
         const rect = chartContainerRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // In cursor mode, try to select an existing drawing
+        if (activeTool === 'cursor') {
+            // Check if click is near any drawing line (within 10 pixels)
+            let foundDrawing: string | null = null;
+
+            for (const d of drawings) {
+                if (!d.p1 || !d.p2) continue;
+
+                const p1x = chart.timeScale().timeToCoordinate(d.p1.time as any);
+                const p1y = series.priceToCoordinate(d.p1.price);
+                const p2x = chart.timeScale().timeToCoordinate(d.p2.time as any);
+                const p2y = series.priceToCoordinate(d.p2.price);
+
+                if (p1x === null || p1y === null || p2x === null || p2y === null) continue;
+
+                // Calculate distance from click to line segment
+                const dist = distanceToLineSegment(clickX, clickY, p1x, p1y, p2x, p2y);
+                if (dist < 15) {
+                    foundDrawing = d.id;
+                    break;
+                }
+            }
+
+            setSelectedDrawingId(foundDrawing);
+            console.log('[DRAW] Selected:', foundDrawing);
+            drawOverlay();
+            return;
+        }
+
+        // For drawing tools, use the coordinates we already captured
+        const x = clickX;
+        const y = clickY;
         console.log('[DRAW] Click coords:', { x, y, rectWidth: rect.width, rectHeight: rect.height });
 
         const time = chart.timeScale().coordinateToTime(x) as number;
@@ -668,6 +730,27 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         }
         drawOverlay();
     };
+
+    // Keyboard handler for deleting selected drawings
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
+                setDrawings(prev => prev.filter(d => d.id !== selectedDrawingId));
+                setSelectedDrawingId(null);
+                drawOverlay();
+            }
+            // Escape to deselect
+            if (e.key === 'Escape') {
+                setSelectedDrawingId(null);
+                setActiveTool('cursor');
+                drawingStateRef.current = { isDrawing: false, startPoint: null, currentPoint: null };
+                drawOverlay();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedDrawingId, drawOverlay]);
 
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!drawingStateRef.current.isDrawing) return;
@@ -806,16 +889,15 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 >
                     <canvas
                         ref={overlayRef}
-                        // Enable pointer events when a drawing tool is selected (not cursor)
+                        // Enable pointer events when drawing OR when in cursor mode with drawings
                         className={`absolute top-0 left-0 w-full h-full z-10 ${!drawingsVisible ? 'opacity-0' : ''
-                            } ${activeTool !== 'cursor' && !drawingsLocked
-                                ? 'cursor-crosshair'
+                            } ${(activeTool !== 'cursor' || drawings.length > 0) && !drawingsLocked
+                                ? (activeTool !== 'cursor' ? 'cursor-crosshair' : 'cursor-pointer')
                                 : 'pointer-events-none'
                             }`}
                         style={{ width: '100%', height: '100%' }}
                         onClick={(e) => {
                             if (drawingsLocked) return;
-                            if (activeTool === 'cursor') return;
                             handleContainerClick(e);
                         }}
                         onMouseMove={handleMouseMove}
