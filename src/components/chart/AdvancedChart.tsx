@@ -129,6 +129,14 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
     const [drawingsVisible, setDrawingsVisible] = useState(true);
     const [drawingsLocked, setDrawingsLocked] = useState(false);
     const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef<{
+        id: string;
+        startMouseX: number;
+        startMouseY: number;
+        origP1: { time: number; price: number };
+        origP2: { time: number; price: number };
+    } | null>(null);
 
     // DEBUG STATE (Moved here)
     const [debugInfo, setDebugInfo] = useState<any>(null);
@@ -953,9 +961,90 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         const time = chart.timeScale().coordinateToTime(x) as number;
         const price = series.coordinateToPrice(y);
 
+        // Handle dragging a selected drawing
+        if (isDragging && dragStartRef.current && selectedDrawingId) {
+            const deltaX = x - dragStartRef.current.startMouseX;
+            const deltaY = y - dragStartRef.current.startMouseY;
+
+            // Convert delta to time/price units
+            const startTime = chart.timeScale().coordinateToTime(dragStartRef.current.startMouseX) as number;
+            const endTime = chart.timeScale().coordinateToTime(x) as number;
+            const timeDelta = endTime - startTime;
+
+            const startPrice = series.coordinateToPrice(dragStartRef.current.startMouseY);
+            const endPrice = series.coordinateToPrice(y);
+            const priceDelta = (endPrice as number) - (startPrice as number);
+
+            // Update drawing position
+            setDrawings(prev => prev.map(d => {
+                if (d.id === selectedDrawingId) {
+                    return {
+                        ...d,
+                        p1: {
+                            time: dragStartRef.current!.origP1.time + timeDelta,
+                            price: dragStartRef.current!.origP1.price + priceDelta
+                        },
+                        p2: d.p2 ? {
+                            time: dragStartRef.current!.origP2.time + timeDelta,
+                            price: dragStartRef.current!.origP2.price + priceDelta
+                        } : null
+                    };
+                }
+                return d;
+            }));
+            return;
+        }
+
+        // Handle drawing preview
         if (time && price) {
             drawingStateRef.current.currentPoint = { time, price };
             drawOverlay(); // Redraw preview
+        }
+    };
+
+    // Handle mouse down for starting drag
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (drawingsLocked || activeTool !== 'cursor' || !selectedDrawingId) return;
+
+        const selectedDrawing = drawings.find(d => d.id === selectedDrawingId);
+        if (!selectedDrawing || !selectedDrawing.p2) return;
+
+        const chart = chartInstancesRef.current?.mainChart;
+        const series = chartInstancesRef.current?.candleSeries;
+        if (!chart || !series || !chartContainerRef.current) return;
+
+        const rect = chartContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Check if mouse is near the selected drawing
+        const p1x = chart.timeScale().timeToCoordinate(selectedDrawing.p1.time as any);
+        const p1y = series.priceToCoordinate(selectedDrawing.p1.price);
+        const p2x = chart.timeScale().timeToCoordinate(selectedDrawing.p2.time as any);
+        const p2y = series.priceToCoordinate(selectedDrawing.p2.price);
+
+        if (p1x === null || p1y === null || p2x === null || p2y === null) return;
+
+        const dist = distanceToLineSegment(x, y, p1x, p1y, p2x, p2y);
+        if (dist < 20) {
+            setIsDragging(true);
+            dragStartRef.current = {
+                id: selectedDrawingId,
+                startMouseX: x,
+                startMouseY: y,
+                origP1: { ...selectedDrawing.p1 },
+                origP2: { ...selectedDrawing.p2 }
+            };
+            e.preventDefault();
+        }
+    };
+
+    // Handle mouse up for ending drag
+    const handleMouseUp = () => {
+        if (isDragging) {
+            setIsDragging(false);
+            dragStartRef.current = null;
+            drawOverlay();
         }
     };
 
@@ -1079,15 +1168,18 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                         // Enable pointer events when drawing OR when in cursor mode with drawings
                         className={`absolute top-0 left-0 w-full h-full z-10 ${!drawingsVisible ? 'opacity-0' : ''
                             } ${(activeTool !== 'cursor' || drawings.length > 0) && !drawingsLocked
-                                ? (activeTool !== 'cursor' ? 'cursor-crosshair' : 'cursor-pointer')
+                                ? (isDragging ? 'cursor-move' : (selectedDrawingId ? 'cursor-move' : (activeTool !== 'cursor' ? 'cursor-crosshair' : 'cursor-pointer')))
                                 : 'pointer-events-none'
                             }`}
                         style={{ width: '100%', height: '100%' }}
                         onClick={(e) => {
                             if (drawingsLocked) return;
-                            handleContainerClick(e);
+                            if (!isDragging) handleContainerClick(e);
                         }}
+                        onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
                     />
                 </div>
             </div>
