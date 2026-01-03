@@ -209,6 +209,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
     };
 
     const handleToolSelect = (tool: DrawingTool) => {
+        console.log('[TOOLBAR] Tool selected:', tool);
         onSelectTool(tool);
         setExpandedCategory(null);
     };
@@ -226,8 +227,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                             <button
                                 onClick={() => handleCategoryClick(category.id)}
                                 className={`w-full p-3 flex items-center justify-center relative group transition-all ${isActive
-                                        ? 'bg-blue-600 text-white'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
                                     }`}
                                 title={category.name}
                             >
@@ -257,8 +258,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                                             key={tool.id}
                                             onClick={() => handleToolSelect(tool.id)}
                                             className={`w-full px-3 py-2 flex items-center gap-3 text-sm transition-colors ${activeTool === tool.id
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'text-gray-300 hover:bg-gray-700'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'text-gray-300 hover:bg-gray-700'
                                                 }`}
                                         >
                                             {tool.icon}
@@ -281,8 +282,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                 <button
                     onClick={onToggleVisibility}
                     className={`p-2.5 rounded transition-colors group relative ${drawingsVisible
-                            ? 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
-                            : 'text-yellow-500 bg-yellow-500/10'
+                        ? 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                        : 'text-yellow-500 bg-yellow-500/10'
                         }`}
                     title={drawingsVisible ? 'Hide Drawings' : 'Show Drawings'}
                 >
@@ -293,8 +294,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                 <button
                     onClick={onLockDrawings}
                     className={`p-2.5 rounded transition-colors group relative ${drawingsLocked
-                            ? 'text-blue-400 bg-blue-500/10'
-                            : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                        ? 'text-blue-400 bg-blue-500/10'
+                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
                         }`}
                     title={drawingsLocked ? 'Unlock Drawings' : 'Lock Drawings'}
                 >

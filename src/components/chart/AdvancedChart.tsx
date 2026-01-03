@@ -295,6 +295,27 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
         };
     }, [loading]);
 
+    // 2.5 Initialize Canvas Size for Drawing
+    useEffect(() => {
+        if (!chartContainerRef.current || !overlayRef.current) return;
+
+        const resizeCanvas = () => {
+            if (overlayRef.current && chartContainerRef.current) {
+                const rect = chartContainerRef.current.getBoundingClientRect();
+                overlayRef.current.width = rect.width;
+                overlayRef.current.height = rect.height;
+                console.log('[CANVAS] Resized to:', rect.width, 'x', rect.height);
+            }
+        };
+
+        resizeCanvas();
+
+        const observer = new ResizeObserver(resizeCanvas);
+        observer.observe(chartContainerRef.current);
+
+        return () => observer.disconnect();
+    }, [loading]);
+
     // 3. Update Candle Data
     useEffect(() => {
         if (!chartInstancesRef.current || ohlcvData.length === 0) return;
