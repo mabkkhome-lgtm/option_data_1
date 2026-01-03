@@ -779,7 +779,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
 
 
             {/* Main Area */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative overflow-visible">
                 {/* Left Toolbar - absolute positioned within this container */}
                 <DrawingToolbar
                     activeTool={activeTool}

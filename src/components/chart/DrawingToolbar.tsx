@@ -215,9 +215,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
     };
 
     return (
-        <div className="absolute left-0 top-0 h-full w-12 bg-[#1e222d] border-r border-gray-800 flex flex-col z-30">
+        <div className="absolute left-0 top-0 h-full w-12 bg-[#1e222d] border-r border-gray-800 flex flex-col z-30 overflow-visible">
             {/* Main Tool Categories */}
-            <div className="flex-1 overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-gray-700">
+            <div className="flex-1 py-2 overflow-visible">
                 {TOOL_CATEGORIES.map((category) => {
                     const isActive = category.tools.some(t => t.id === activeTool);
                     const isExpanded = expandedCategory === category.id;
