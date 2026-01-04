@@ -84,10 +84,47 @@ export async function GET() {
             };
         });
 
+        // Process immature hours: For 00:00-08:00 CET of each day, use previous day's 23:55 values
+        // This is because new contracts for next expiry aren't mature enough
+        const processedData = normalized.map((item: any, index: number, arr: any[]) => {
+            const date = new Date(item.timestamp * 1000);
+            // Convert to CET for hour check
+            const cetHour = parseInt(date.toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }));
+
+            // If between 00:00 and 08:00 CET
+            if (cetHour >= 0 && cetHour < 8) {
+                // Find the previous day's ~23:55 value
+                // Calculate the start of this CET day
+                const cetDateStr = date.toLocaleString('en-US', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+                // Look for a value from the previous day around 23:00-23:59
+                const prevDayEndValue = arr.find((d: any) => {
+                    const dDate = new Date(d.timestamp * 1000);
+                    const dCetHour = parseInt(dDate.toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }));
+                    const dCetDateStr = dDate.toLocaleString('en-US', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+                    // Different day and hour is 23
+                    return dCetDateStr !== cetDateStr && dCetHour === 23 && d.timestamp < item.timestamp;
+                });
+
+                if (prevDayEndValue) {
+                    return {
+                        ...item,
+                        support: prevDayEndValue.support,
+                        resistance: prevDayEndValue.resistance,
+                        gammaHigh: prevDayEndValue.gammaHigh,
+                        gammaLow: prevDayEndValue.gammaLow
+                    };
+                }
+            }
+
+            return item;
+        });
+
         return NextResponse.json({
             success: true,
-            count: normalized.length,
-            data: normalized
+            count: processedData.length,
+            data: processedData
         }, {
             headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
