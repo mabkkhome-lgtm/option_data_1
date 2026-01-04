@@ -246,9 +246,34 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                 crosshair: {
                     mode: CrosshairMode.Normal,
                 },
+                localization: {
+                    // Format time in EST (UTC-5)
+                    timeFormatter: (time: number) => {
+                        const date = new Date(time * 1000);
+                        // Convert to EST (America/New_York)
+                        return date.toLocaleString('en-US', {
+                            timeZone: 'America/New_York',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                    },
+                },
                 timeScale: {
                     borderColor: '#485c7b',
                     timeVisible: true,
+                    secondsVisible: false,
+                    tickMarkFormatter: (time: number) => {
+                        const date = new Date(time * 1000);
+                        return date.toLocaleString('en-US', {
+                            timeZone: 'America/New_York',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                    },
                 },
                 rightPriceScale: {
                     borderColor: '#485c7b',
