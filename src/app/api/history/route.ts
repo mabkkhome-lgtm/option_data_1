@@ -84,42 +84,61 @@ export async function GET() {
             };
         });
 
-        // TODO: Immature hours logic commented out temporarily - needs optimization
-        // For 00:00-08:00 CET, should use previous day's 23:55 values
-        // Currently disabled to restore dynamic lines
+        // Efficient immature hours processing: O(n) using pre-computed lookup
+        // For 00:00-08:00 CET of each day, use previous day's last value (around 23:xx)
 
-        /*
-        const processedData = normalized.map((item: any, index: number, arr: any[]) => {
-            const date = new Date(item.timestamp * 1000);
+        // Helper to get CET date string and hour from timestamp
+        const getCetInfo = (ts: number) => {
+            const date = new Date(ts * 1000);
+            const cetDateStr = date.toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' }); // YYYY-MM-DD format
             const cetHour = parseInt(date.toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }));
-            
+            return { cetDateStr, cetHour };
+        };
+
+        // Step 1: Build a lookup of the last value for each CET date (values from hour 20-23)
+        const dailyClosingValues: Map<string, any> = new Map();
+
+        // Sort by timestamp ascending for proper ordering
+        const sortedNormalized = [...normalized].sort((a, b) => a.timestamp - b.timestamp);
+
+        for (const item of sortedNormalized) {
+            const { cetDateStr, cetHour } = getCetInfo(item.timestamp);
+            // Only consider values from evening hours (20-23) as "mature" closing values
+            if (cetHour >= 20 && cetHour <= 23) {
+                dailyClosingValues.set(cetDateStr, item);
+            }
+        }
+
+        // Step 2: For each item, if it's in immature hours (00-08 CET), replace with previous day's closing
+        const processedData = sortedNormalized.map((item: any) => {
+            const { cetDateStr, cetHour } = getCetInfo(item.timestamp);
+
+            // If between 00:00 and 08:00 CET
             if (cetHour >= 0 && cetHour < 8) {
-                const cetDateStr = date.toLocaleString('en-US', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' });
-                const prevDayEndValue = arr.find((d: any) => {
-                    const dDate = new Date(d.timestamp * 1000);
-                    const dCetHour = parseInt(dDate.toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }));
-                    const dCetDateStr = dDate.toLocaleString('en-US', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' });
-                    return dCetDateStr !== cetDateStr && dCetHour === 23 && d.timestamp < item.timestamp;
-                });
-                
-                if (prevDayEndValue) {
+                // Calculate previous day's date string
+                const currentDate = new Date(item.timestamp * 1000);
+                currentDate.setDate(currentDate.getDate() - 1);
+                const prevDateStr = currentDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+
+                const prevDayClosing = dailyClosingValues.get(prevDateStr);
+                if (prevDayClosing) {
                     return {
                         ...item,
-                        support: prevDayEndValue.support,
-                        resistance: prevDayEndValue.resistance,
-                        gammaHigh: prevDayEndValue.gammaHigh,
-                        gammaLow: prevDayEndValue.gammaLow
+                        support: prevDayClosing.support,
+                        resistance: prevDayClosing.resistance,
+                        gammaHigh: prevDayClosing.gammaHigh,
+                        gammaLow: prevDayClosing.gammaLow
                     };
                 }
             }
+
             return item;
         });
-        */
 
         return NextResponse.json({
             success: true,
-            count: normalized.length,
-            data: normalized
+            count: processedData.length,
+            data: processedData
         }, {
             headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
