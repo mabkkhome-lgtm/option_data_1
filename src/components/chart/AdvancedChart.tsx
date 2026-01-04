@@ -247,12 +247,12 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     mode: CrosshairMode.Normal,
                 },
                 localization: {
-                    // Format time in EST (UTC-5)
+                    // Format time in CET (Central European Time)
                     timeFormatter: (time: number) => {
                         const date = new Date(time * 1000);
-                        // Convert to EST (America/New_York)
+                        // Convert to CET (Europe/Berlin)
                         return date.toLocaleString('en-US', {
-                            timeZone: 'America/New_York',
+                            timeZone: 'Europe/Berlin',
                             month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
@@ -268,7 +268,7 @@ const AdvancedChart: React.FC<AdvancedChartProps> = ({
                     tickMarkFormatter: (time: number) => {
                         const date = new Date(time * 1000);
                         return date.toLocaleString('en-US', {
-                            timeZone: 'America/New_York',
+                            timeZone: 'Europe/Berlin',
                             hour: '2-digit',
                             minute: '2-digit',
                             hour12: false
